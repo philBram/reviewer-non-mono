@@ -82,11 +82,12 @@ export function searchCode() {
     pattern: z.string().describe('Search pattern (supports regex and plain text)'),
     contextLines: z.number().default(10).describe('Number of context lines around each match (default 10)'),
     useRegex: z.boolean().default(true).describe('Treat pattern as extended regex (default true)'),
+    maxResults: z.number().default(10).describe('Maximum number of file results to return (default 10)'),
   });
 
   return tool(
     async (input) => {
-      const { pattern, contextLines, useRegex } = schema.parse(input);
+      const { pattern, contextLines, useRegex, maxResults } = schema.parse(input);
       
       try {
         const matches = await grepSearch(pattern, contextLines, useRegex);
@@ -95,12 +96,20 @@ export function searchCode() {
           return JSON.stringify({ found: false, matches: [], message: 'No matches found.' }, null, 2);
         }
 
-        const results = matches.map(match => ({
+        const truncatedMatches = matches.slice(0, maxResults);
+        const results = truncatedMatches.map(match => ({
           file: match.file,
           context: match.context.join('\n'),
         }));
+        const truncated = matches.length > maxResults;
 
-        return JSON.stringify({ found: true, count: results.length, matches: results }, null, 2);
+        return JSON.stringify({ 
+          found: true,
+          count: results.length,
+          truncated, 
+          total: matches.length,
+          matches: results 
+        }, null, 2);
       } catch (error: any) {
         return JSON.stringify({ 
           found: false, 
