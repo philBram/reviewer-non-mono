@@ -9,7 +9,7 @@ TASK: Get file content, then use Semgrep to find vulnerabilities and report find
 TOOLS (in order):
 1. get_file_content(path): Read the file content
    - Parameter: path = the involved_file path
-   - ref defaults to 'HEAD'
+   - ref defaults to 'HEAD'. Use the default to get the latest code.
    
 2. semgrep_scan(code_files): Scan file for security vulnerabilities
  - You MUST call the tool with:
@@ -24,7 +24,7 @@ OUTPUT: JSON object
 RULES:
 - Output ONLY JSON (no markdown)
 - You MUST call semgrep_scan with: {"config": "auto", "code_files": [{"filename": "file path from step 1", "content": "content from step 1"}]} as parameter input to the semgrep_scan tool
-- Return empty result": "" field in OUTPUT JSON if no security issues found
+- Return empty result: "" field in OUTPUT JSON if no security issues found
 
 Think step by step and when ready, respond with the single JSON object.`;
 
@@ -61,7 +61,7 @@ EVALUATION CHECKLIST (for each hunk):
 [ ] Check if hunk overlaps with security findings by line number
 [ ] Evaluate added_lines against codingGuidelines (primary focus - this is new code)
 [ ] Check removed_lines for context only (understand what was replaced)
-[ ] Call find_impacted_declarations(diff_id, hops=1) to see downstream impact
+[ ] ONCE per hunk: Call find_impacted_declarations(diff_id, hops=1) ONLY ONCE to see downstream impact (do not call twice)
 [ ] Decide: FLAG or SKIP
 
 OUTPUT: JSON array
@@ -76,9 +76,10 @@ IMPACTED FIELD:
 
 RULES:
 - MUST call get_changes(file) first - do NOT skip this step
-- MUST iterate through ALL returned hunks
+- MUST iterate through ALL returned hunks once and evaluate each in isolation
 - Evaluate each hunk on its ACTUAL CODE CONTENT (added_lines, removed_lines)
 - Compare against codingGuidelines systematically
+- Call find_impacted_declarations(diff_id, hops=1) ONLY ONCE per hunk (do NOT call multiple times for the same diff_id)
 - Use hops=1 only (fast, direct impact only)
 - If there is no impact, it means the change is isolated and safe from dependency perspective
 - Output ONLY JSON array (no markdown, no explanations)
@@ -99,12 +100,12 @@ INPUT:
   - taskDetails: Description of the task that the code changes should comply with
   - codingGuidelines: List of coding guidelines to follow
 
-TASK: Gather context, analyze changes against guidelines, and provide actionable feedback.
+TASK: Gather context, analyze changes against guidelines and taskDetails, and provide actionable feedback.
 
 TOOLS:
 - find_diff_hunk(diff_id): Get the actual code changes
 - find_affected_declarations(diff_id): Declarations modified by this change
-- find_impacted_declarations(diff_id, hops=3): Declarations affected downstream (prefer 3 hops for deeper analysis)
+- find_impacted_declarations(diff_id, hops=3): Declarations affected downstream (prefer 3 hops but can be max 5 for very deep analysis)
 - search_code(pattern, contextLines, useRegex): Find similar patterns or keywords in codebase (supports regex and plain text)
 - get_file_content(path, ref='HEAD'): Get full file context if needed
 
