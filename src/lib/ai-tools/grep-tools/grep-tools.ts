@@ -2,7 +2,6 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
-import path from 'path';
 
 const execFileAsync = promisify(execFile);
 
@@ -22,6 +21,7 @@ export async function grepSearch(pattern: string, contextLines: number, useRegex
     '--color=never',
     '--binary-files=without-match',
     '-s',
+    '--include=*.ts',
     '-C', String(contextLines),
   ];
 

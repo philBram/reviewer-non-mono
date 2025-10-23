@@ -26,7 +26,10 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
       body: comment.body,
       commit_id: comment.commit_id,
       path: comment.path,
-      subject_type: 'file',
+      start_line: comment.start_line,
+      start_side: 'RIGHT',
+      end_line: comment.end_line,
+      side: 'RIGHT',
       headers: {
         'X-GitHub-Api-Version': '2022-11-28'
       }
@@ -45,6 +48,7 @@ async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
           commit_id: hunk.commit_id,
           path: hunk.source,
           start_line: hunk.start_line,
+          end_line: hunk.end_line,
         };
       }
 
