@@ -113,7 +113,7 @@ export class OrchestratorAgent {
       await checkOutBranch(baseBranch);
 
       await this.graphDbSetup.buildGraph(gitDiffHunks);
-      await this.vectorDbSetup.storeInWeaviate();
+      //await this.vectorDbSetup.storeInWeaviate();
 
       await checkOutBranch(branch);
 

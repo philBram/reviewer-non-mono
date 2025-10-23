@@ -36,29 +36,12 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
 
 async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
   const diffHunks = await getAllDiffHunks();
-  // dynamic import Prettier at runtime to avoid bundler/runtime createRequire errors
-  let prettier: any = null;
-  try {
-    prettier = await import('prettier');
-  } catch (err) {
-    logger.warn('Prettier not available or failed to import; skipping formatting', err as any);
-  }
 
   const githubComments = diffHunks.flatMap(hunk => {
     const matchingReviews = reviews.map(review => {
       if (review.diff_id === hunk.id) {
-        let formattedCode = review.code_suggestion;
-        try {
-          if (prettier && typeof prettier.format === 'function') {
-            formattedCode = prettier.format(review.code_suggestion, { parser: 'typescript' });
-          }
-        } catch (e) {
-          logger.warn('Prettier formatting failed, using raw suggestion', e as any);
-          formattedCode = review.code_suggestion;
-        }
-
         return {
-          body: review.suggestion + '\n\n' + formattedCode,
+          body: review.suggestion + '\n\n' + review.code_suggestion + '\n\n' + review.type,
           commit_id: hunk.commit_id,
           path: hunk.source,
           start_line: hunk.start_line,

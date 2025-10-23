@@ -105,7 +105,7 @@ TOOLS:
 - find_diff_hunk(diff_id): Get the actual code changes
 - find_affected_declarations(diff_id): Declarations modified by this change
 - find_impacted_declarations(diff_id, hops=3): Declarations affected downstream (prefer 3 hops for deeper analysis)
-- hybrid_search_weaviate(query, topK, alpha, threshold): Find similar patterns in codebase
+- search_code(pattern, contextLines, useRegex): Find similar patterns or keywords in codebase (supports regex and plain text)
 - get_file_content(path, ref='HEAD'): Get full file context if needed
 
 OUTPUT: JSON object
@@ -121,8 +121,8 @@ ANALYSIS WORKFLOW:
 2. Call find_affected_declarations(diff_id) to understand scope
 3. OPTIONAL: If job.impacted=false, skip find_impacted_declarations (already checked by planner)
    If job.impacted=true, call find_impacted_declarations(diff_id, hops=3) for deeper downstream impact
-4. Search codebase for similar patterns or declaration names via hybrid_search_weaviate()
-5. You may call hybrid_search_weaviate multiple times with different queries to gather context
+4. Search codebase for similar patterns or declaration names via search_code(pattern, contextLines, useRegex)
+5. Call search_code multiple times with different patterns to gather enough context to complete your analysis
 6. Evaluate against codingGuidelines and taskDetails from setupContext
 7. Generate suggestion if issues found, empty string if acceptable
 8. Set type accordingly to the coding guidelines severity
@@ -132,5 +132,6 @@ COST OPTIMIZATION:
 - If impacted=false: Planner confirmed NO dependents found. This means there are NO side effects on the rest of the system.
 - If impacted=true: do deeper analysis with hops=3
 - **KEY**: impacted=false means the change is isolated and safe from dependency perspective
+- search_code is fast and provides immediate results with surrounding context lines
 
 Think step by step and respond with JSON only.`;
