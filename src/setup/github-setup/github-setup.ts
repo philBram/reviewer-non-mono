@@ -2,16 +2,6 @@ import { logger, ModelReviewsOutput } from '../../lib/ai-utils';
 import { getAllDiffHunks } from '../graph-db-setup/neo4j-graph-github-query';
 import { MCPTools } from '../../lib/ai-tools/mcp-tools/mcp-tools';
 
-interface CommentBody {
-  body: string;
-  commit_id: string;
-  path: string;
-  start_line?: number;
-  line: number;
-  start_side?: string;
-}
-
-
 export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[]) {
   const repoName = process.env.REPO_NAME || '';
   const prNumber = parseInt(process.env.PR_NUMBER || '0', 10) || 0;
@@ -54,33 +44,31 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
         continue;
       }
 
+      const commentArgs = {
+        owner,
+        repo,
+        pullNumber: prNumber,
+        path: comment.path,
+        body: comment.body,
+        subjectType: 'LINE',
+        line: comment.line,
+        side: 'RIGHT',
+      };
+
+      logger.info({ commentArgs }, 'Attempting to add comment');
+      
       try {
-        const commentArgs: any = {
-          owner,
-          repo,
-          pullNumber: prNumber,
-          path: comment.path,
-          body: comment.body,
-          subjectType: 'LINE',
-          line: comment.end_line,
-          side: 'RIGHT',
-        };
-
-        if (comment.start_line && comment.end_line && comment.start_line !== comment.end_line) {
-          commentArgs.startLine = comment.start_line;
-          commentArgs.startSide = 'RIGHT';
-        }
-
-        await addCommentTool.invoke(commentArgs);
-        logger.info({ commentArgs }, 'Comment added successfully');
+        const result = await addCommentTool.invoke(commentArgs);
+        logger.info({ result, path: comment.path, line: comment.line }, 'Comment added successfully');
       } catch (error) {
         logger.error(
           { 
-            err: error, 
-            path: comment.path, 
-            line: comment.end_line,
+            error: error,
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            commentArgs,
           }, 
-          'Error adding comment to pending review'
+          'Failed to add comment to pending review'
         );
       }
     }
@@ -110,8 +98,7 @@ async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
           body: review.suggestion + '\n\n' + review.code_suggestion,
           commit_id: hunk.commit_id,
           path: hunk.source,
-          start_line: hunk.start_line,
-          end_line: hunk.end_line,
+          line: hunk.end_line,
         };
       }
 
