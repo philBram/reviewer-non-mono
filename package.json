@@ -1,0 +1,45 @@
+{
+  "name": "code-reviewer",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/main.js",
+    "dev": "ts-node src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write src"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.37.0",
+    "@types/node": "~24.7.2",
+    "eslint": "^9.37.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.6.2",
+    "ts-node": "10.9.2",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.46.0"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "^0.3.30",
+    "@langchain/community": "^0.3.57",
+    "@langchain/core": "^0.3.78",
+    "@langchain/google-genai": "^0.2.18",
+    "@langchain/langgraph": "^0.4.9",
+    "@langchain/mcp-adapters": "^0.6.0",
+    "@langchain/mistralai": "^0.2.3",
+    "@langchain/openai": "^0.6.16",
+    "@langchain/textsplitters": "^0.1.0",
+    "@langchain/weaviate": "^0.2.3",
+    "dotenv": "^16.6.1",
+    "langchain": "^0.3.35",
+    "neo4j-driver": "^6.0.0",
+    "pino": "^10.1.0",
+    "pino-pretty": "^13.1.2",
+    "simple-git": "^3.28.0",
+    "ts-morph": "^27.0.2",
+    "uuid": "^13.0.0",
+    "weaviate-client": "^3.9.0",
+    "zod": "^4.0.0"
+  }
+}
