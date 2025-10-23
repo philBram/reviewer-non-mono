@@ -95,7 +95,9 @@ export class AstGraphDbSetup {
     const declEndLine = decl.getEndLineNumber();
 
     for (const hunk of diffHunks) {
-      const hunkOverlapsDecl = hunk.start_line <= declEndLine && (hunk.end_line || hunk.start_line) >= declStartLine;
+      const hunkOverlapsDecl = 
+        hunk.start_line <= declEndLine && hunk.end_line >= declStartLine ||
+        hunk.start_line >= declStartLine && hunk.end_line <= declEndLine;
       
       if (hunkOverlapsDecl) {
         const addedLines = hunk.content

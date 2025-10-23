@@ -1,3 +1,4 @@
+import { start } from 'repl';
 import simpleGit from 'simple-git';
 
 const IGNORE_REGEX = /node_modules|\/dist\/|\/build\/|\.spec\.ts$|\.d\.ts$|jest.*\.ts$|\.ya?ml$|\.json$/;
@@ -9,7 +10,7 @@ export interface DiffDetails {
 
 interface DiffHunks {
   start_line: number;
-  end_line?: number;
+  end_line: number;
   content: string[];
   commit_id?: string;
 }
@@ -49,7 +50,7 @@ export async function getGitDiffHunks(file_path: string, baseBranch: string) {
     
     if (hunkHeader) {
       if (currentHunk) {
-        const end_line = currentHunk.start_line + currentHunk.content.length - 1;
+        const end_line = currentHunk.end_line;
         const commit = await git.log([`-L ${currentHunk.start_line},${end_line}:${file_path}`]);
         const commit_id = commit?.latest?.hash;
 
@@ -62,6 +63,7 @@ export async function getGitDiffHunks(file_path: string, baseBranch: string) {
       }
       currentHunk = {
         start_line: parseInt(hunkHeader[3], 10),
+        end_line: parseInt(hunkHeader[3], 10) + (parseInt(hunkHeader[4], 10) || 1) - 1,
         content: [],
       };
       continue;
@@ -72,11 +74,10 @@ export async function getGitDiffHunks(file_path: string, baseBranch: string) {
   }
 
   if (currentHunk) {
-    const end_line = currentHunk.start_line + currentHunk.content.length - 1;
+    const end_line = currentHunk.end_line;
     const commit = await git.log([`-L ${currentHunk.start_line},${end_line}:${file_path}`]);
 
     currentHunk.commit_id = commit?.latest?.hash;
-    currentHunk.end_line = end_line;
     diffHunks.push(currentHunk);
   }
 
