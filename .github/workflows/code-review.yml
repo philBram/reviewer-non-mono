@@ -60,15 +60,15 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        working-directory: code_reviewer
+        working-directory: reviewer-non-mono
         run: npm install
 
       - name: Build TypeScript
-        working-directory: code_reviewer
+        working-directory: reviewer-non-mono
         run: npm run build
 
       - name: Run code review
-        working-directory: code_reviewer
+        working-directory: reviewer-non-mono
         env:
           NODE_OPTIONS: --max-old-space-size=6144
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
