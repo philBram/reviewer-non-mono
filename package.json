@@ -4,8 +4,7 @@
   "version": "0.0.1",
   "scripts": {
     "build": "esbuild src/main.ts --bundle --platform=node --target=es2020 --outfile=dist/main.js",
-    "build:typecheck": "tsc --noEmit",
-    "build:esbuild": "esbuild src/main.ts --bundle --platform=node --target=es2020 --outfile=dist/main.js",
+    "start": "npm run build && node dist/main.js",
     "dev": "ts-node src/main.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
