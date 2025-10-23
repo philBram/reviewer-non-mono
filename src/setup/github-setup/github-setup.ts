@@ -1,6 +1,16 @@
 import { logger, ModelReviewsOutput } from '../../lib/ai-utils';
 import { getAllDiffHunks } from '../graph-db-setup/neo4j-graph-github-query';
 
+interface CommentBody {
+  body: string;
+  commit_id: string;
+  path: string;
+  start_line?: number;
+  line: number;
+  start_side?: string;
+}
+
+
 export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[]) {
   const token = process.env.GITHUB_TOKEN || '';
   const repoName = process.env.REPO_NAME || '';
@@ -12,8 +22,28 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
 
   for (const comment of preparedComments) {
     try {
-      logger.debug({ path: comment?.path, startLine: comment?.start_line }, 'Posting comment to GitHub');
+      logger.debug({ 
+        path: comment?.path, 
+        startLine: comment?.start_line, 
+        endLine: comment?.end_line,
+        commitId: comment?.commit_id 
+      }, 'Posting comment to GitHub');
       
+      const commentBody: any = {
+        body: comment?.body,
+        commit_id: comment?.commit_id,
+        path: comment?.path,
+        side: 'RIGHT',
+      };
+
+      if (comment?.start_line && comment?.end_line && comment?.start_line !== comment?.end_line) {
+        commentBody.start_line = comment.start_line;
+        commentBody.line = comment.end_line;
+        commentBody.start_side = 'RIGHT';
+      } else {
+        commentBody.line = comment?.end_line || comment?.start_line;
+      }
+
       const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/comments`, {
         method: 'POST',
         headers: {
@@ -21,13 +51,7 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
           'Content-Type': 'application/json',
           'X-GitHub-Api-Version': '2022-11-28'
         },
-        body: JSON.stringify({
-          body: comment?.body,
-          commit_id: comment?.commit_id,
-          path: comment?.path,
-          start_line: comment?.start_line,
-          line: comment?.end_line,
-        })
+        body: JSON.stringify(commentBody)
       });
 
       if (!response.ok) {
