@@ -1,0 +1,115 @@
+name: Code Review
+
+on:
+  repository_dispatch:
+    types: [review-pr]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    
+    services:
+      neo4j:
+        image: neo4j:latest
+        env:
+          NEO4J_AUTH: neo4j/password123
+          NEO4J_PLUGINS: '["apoc"]'
+          NEO4J_dbms_security_procedures_unrestricted: 'apoc.*'
+        options: >-
+          --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 10
+        ports:
+          - 7474:7474
+          - 7687:7687
+      
+      weaviate:
+        image: cr.weaviate.io/semitechnologies/weaviate:latest
+        env:
+          AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+          DEFAULT_VECTORIZER_MODULE: 'none'
+          ENABLE_MODULES: ''
+          CLUSTER_HOSTNAME: 'node1'
+        options: >-
+          --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:8080/v1/.well-known/ready || exit 1"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 10
+        ports:
+          - 8080:8080
+          - 50051:50051
+
+    steps:
+      - name: Checkout code reviewer repository
+        uses: actions/checkout@v4
+        with:
+          path: reviewer-non-mono
+
+      - name: Checkout PR repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.client_payload.repo }}
+          ref: ${{ github.event.client_payload.branch }}
+          path: repo_to_review
+          token: ${{ secrets.CODE_REVIEWER_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: code_reviewer
+        run: npm install
+
+      - name: Build TypeScript
+        working-directory: code_reviewer
+        run: npm run build
+
+      - name: Run code review
+        working-directory: code_reviewer
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_API_INSTANCE_NAME: ${{ secrets.AZURE_OPENAI_API_INSTANCE_NAME }}
+          AZURE_OPENAI_API_ENDPOINT: ${{ secrets.AZURE_OPENAI_API_ENDPOINT }}
+          AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
+          AZURE_OPENAI_API_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_API_DEPLOYMENT_NAME }}
+          AZURE_OPENAI_API_EMBEDDINGS_DEPLOYMENT_NAME: ${{ secrets.AZURE_OPENAI_API_EMBEDDINGS_DEPLOYMENT_NAME }}
+          
+          CLICKUP_API_KEY: ${{ secrets.CLICKUP_API_KEY }}
+          
+          WEAVIATE_HOST: localhost
+          WEAVIATE_PORT: 8080
+          WEAVIATE_GRPC_PORT: 50051
+          
+          NEO4J_URL: bolt://localhost:7687
+          NEO4J_USER: neo4j
+          NEO4J_PASSWORD: password123
+          
+          LANGSMITH_TRACING: ${{ secrets.LANGSMITH_TRACING || 'false' }}
+          LANGSMITH_ENDPOINT: ${{ secrets.LANGSMITH_ENDPOINT }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          LANGSMITH_PROJECT: code-reviewer
+          
+          WORKSPACE_ID: ${{ secrets.WORKSPACE_ID }}
+          DOC_ID: ${{ secrets.DOC_ID }}
+          PAGE_ID: ${{ secrets.PAGE_ID }}
+
+          REPO_PATH: ../repo_to_review
+          REPO_BRANCH: ${{ github.event.client_payload.branch }}
+          REPO_NAME: ${{ github.event.client_payload.repo }}
+          
+          PR_NUMBER: ${{ github.event.client_payload.pr_number }}
+          PR_BASE_BRANCH: ${{ github.event.client_payload.base_branch }}
+          GITHUB_TOKEN: ${{ secrets.CODE_REVIEWER_TOKEN }}
+          
+          NODE_ENV: production
+          LOG_LEVEL: info
+          
+        run: npm start
