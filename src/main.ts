@@ -3,7 +3,7 @@ import { OrchestratorAgent } from './agents/orchestrator-agent/orchestrator-agen
 import * as dotenv from 'dotenv';
 import { MCPTools } from './lib/ai-tools/index';
 import { Neo4jClient, Neo4jVectorStoreClient, WeaviateVectorClient, logger } from './lib/ai-utils/index';
-//import { postPullRequestReviewComments } from './setup/github-setup/github-setup';
+import { postPullRequestReviewComments } from './setup/github-setup/github-setup';
 
 dotenv.config();
 
@@ -43,17 +43,17 @@ export async function main() {
 		logger.info('Orchestrator agent started.');
 		const result = await orchestratorAgent.invoke({}, { recursionLimit });
 		
-		const reviewOutput = result;
+		const reviewOutput = result.modelReviewOutput;
 		logger.info({ reviewOutput });
 		
-		/*if (reviewOutput && reviewOutput.length > 0) {
+		if (reviewOutput && reviewOutput.length > 0) {
 			logger.info({ count: reviewOutput.length }, 'Processing review items for GitHub');
 			await postPullRequestReviewComments(reviewOutput);
 		} else {
 			logger.info('No review items to post.');
 		}
 
-		logger.info({ reviewCount: result.modelReviewOutput?.length || 0 }, 'Code review completed successfully');*/
+		logger.info({ reviewCount: result.modelReviewOutput?.length || 0 }, 'Code review completed successfully');
 	} catch (error) {
 		logger.error({ err: error }, 'Error invoking orchestrator agent');
 		throw error;
