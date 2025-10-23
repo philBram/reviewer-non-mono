@@ -1,6 +1,7 @@
 import { logger, ModelReviewsOutput } from '../../lib/ai-utils';
 import { getAllDiffHunks } from '../graph-db-setup/neo4j-graph-github-query';
 import { Octokit } from 'octokit';
+import prettier from 'prettier';
 
 export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[]) {
   const repoName = process.env.REPO_NAME || '';
@@ -41,7 +42,8 @@ async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
     const matchingReviews = reviews.map(review => {
       if (review.diff_id === hunk.id) {
         return {
-          body: review.suggestion + '\n\n' + review.code_suggestion,
+          body: review.suggestion + '\n\n' + 
+            prettier.format(review.code_suggestion, { parser: 'typescript' }),
           commit_id: hunk.commit_id,
           path: hunk.source,
           start_line: hunk.start_line,
