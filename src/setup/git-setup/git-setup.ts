@@ -49,12 +49,13 @@ export async function getGitDiffHunks(file_path: string, baseBranch: string) {
     
     if (hunkHeader) {
       if (currentHunk) {
-        const commit = await git.log([`-L ${currentHunk.start_line},${currentHunk.end_line}:${file_path}`]);
+        const end_line = currentHunk.start_line + currentHunk.content.length - 1;
+        const commit = await git.log([`-L ${currentHunk.start_line},${end_line}:${file_path}`]);
         const commit_id = commit?.latest?.hash;
 
         diffHunks.push({
           start_line: currentHunk.start_line,
-          end_line: currentHunk.start_line + currentHunk.content.length - 1,
+          end_line: end_line,
           content: currentHunk.content,
           commit_id: commit_id,
         });
@@ -71,10 +72,11 @@ export async function getGitDiffHunks(file_path: string, baseBranch: string) {
   }
 
   if (currentHunk) {
-    const commit = await git.log([`-L ${currentHunk.start_line},${currentHunk.end_line}:${file_path}`]);
-    
+    const end_line = currentHunk.start_line + currentHunk.content.length - 1;
+    const commit = await git.log([`-L ${currentHunk.start_line},${end_line}:${file_path}`]);
+
     currentHunk.commit_id = commit?.latest?.hash;
-    currentHunk.end_line = currentHunk.start_line + currentHunk.content.length - 1;
+    currentHunk.end_line = end_line;
     diffHunks.push(currentHunk);
   }
 
