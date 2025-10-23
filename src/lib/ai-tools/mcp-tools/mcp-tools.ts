@@ -16,18 +16,6 @@ export class MCPTools {
     return semgrepTools;
   }
 
-  public static async getGitHubPRTools() {
-    if (!this._mcpclient) {
-      this._mcpclient = this.initializeMCPClient();
-    }
-    const tools = await this._mcpclient.getTools();
-    
-    return tools.filter(tool => 
-      tool.name === 'pull_request_review_write' || 
-      tool.name === 'add_comment_to_pending_review'
-    );
-  }
-
   private static initializeMCPClient() {
     return new MultiServerMCPClient({
       throwOnLoadError: true,
@@ -37,13 +25,6 @@ export class MCPTools {
           'transport': 'http',
           'url': 'https://mcp.semgrep.ai/mcp',
         },
-        'github': {
-          'transport': 'http',
-          'url': 'https://api.githubcopilot.com/mcp/',
-          'headers': {
-            'Authorization': `Bearer ${process.env.GITHUB_TOKEN || ''}`
-          }
-        }
       }
     });
   }

@@ -35,7 +35,6 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
   }
 }
 
-
 async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
   const diffHunks = await getAllDiffHunks();
 
