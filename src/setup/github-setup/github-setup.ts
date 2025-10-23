@@ -20,7 +20,7 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
       continue;
     }
 
-    await octokit.request(`POST /repos/${owner}/${repo}/pulls/${prNumber}/comments`, {
+    await octokit.request(`POST /repos/owner/repo/pulls/prNumber/comments`, {
       owner: owner,
       repo: repo,
       pull_number: prNumber,
