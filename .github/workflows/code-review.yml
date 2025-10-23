@@ -109,7 +109,6 @@ jobs:
           REPO_PATH: ../repo_to_review
           REPO_BRANCH: ${{ github.event.client_payload.branch }}
           REPO_NAME: ${{ github.event.client_payload.repo }}
-          COMMIT_SHA: ${{ github.event.client_payload.commit_sha }}
           
           PR_NUMBER: ${{ github.event.client_payload.pr_number }}
           PR_BASE_BRANCH: ${{ github.event.client_payload.base_branch }}

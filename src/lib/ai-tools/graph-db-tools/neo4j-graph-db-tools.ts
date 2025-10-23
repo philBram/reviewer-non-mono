@@ -26,7 +26,7 @@ export class Neo4jGraphDbTools {
           WHERE d.source = $filePath OR d.source ENDS WITH $filePath
           RETURN d.id AS id, d.name AS name, d.source AS source, d.start_line AS start_line, 
                  d.end_line AS end_line, d.added_lines AS added_lines, 
-                 d.removed_lines AS removed_lines, d.commit_id AS commit_id, d.content AS content
+                 d.removed_lines AS removed_lines, d.content AS content
           ORDER BY d.start_line ASC
         `;
         
@@ -61,7 +61,7 @@ export class Neo4jGraphDbTools {
           MATCH (d:DIFF_HUNK {id: $diffId})
           RETURN d.id AS id, d.name AS name, d.source AS source, d.start_line AS start_line, 
                  d.end_line AS end_line, d.added_lines AS added_lines, 
-                 d.removed_lines AS removed_lines, d.commit_id AS commit_id, d.content AS content
+                 d.removed_lines AS removed_lines, d.content AS content
         `;
         
         const results = await graph.query(cypherQuery, { diffId });

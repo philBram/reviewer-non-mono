@@ -1,12 +1,10 @@
 import { logger, ModelReviewsOutput } from '../../lib/ai-utils';
 import { getAllDiffHunks } from '../graph-db-setup/neo4j-graph-github-query';
-import { MCPTools } from '../../lib/ai-tools/mcp-tools/mcp-tools';
 import { Octokit } from 'octokit';
 
 export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[]) {
   const repoName = process.env.REPO_NAME || '';
   const prNumber = parseInt(process.env.PR_NUMBER || '0', 10) || 0;
-  const commitSha = process.env.COMMIT_SHA || '';
 
   const [owner, repo] = repoName.split('/');
   
@@ -26,7 +24,7 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
       repo: repo,
       pull_number: prNumber,
       body: comment.body,
-      commit_id: commitSha,
+      commit_id: comment.commit_id,
       path: comment.path,
       subject_type: 'file',
       headers: {
@@ -46,6 +44,7 @@ async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
           body: review.suggestion + '\n\n' + review.code_suggestion,
           commit_id: hunk.commit_id,
           path: hunk.source,
+          start_line: hunk.start_line,
         };
       }
 

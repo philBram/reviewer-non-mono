@@ -4,7 +4,6 @@ const IGNORE_REGEX = /node_modules|\/dist\/|\/build\/|\.spec\.ts$|\.d\.ts$|jest.
 
 export interface DiffDetails {
   file_path?: string;
-  commit_id?: string;
   hunks: DiffHunks[];
 }
 
@@ -35,8 +34,6 @@ export async function getChangedFiles(baseBranch: string) {
 
 export async function getGitDiffHunks(file_path: string, baseBranch: string) {
   const git = await getSimpleGitClient();
-  const commitSha = await git.revparse(['HEAD']);
-
   const diff = await git.diff([
     `${baseBranch}...HEAD`,
     '--no-color',
@@ -52,11 +49,14 @@ export async function getGitDiffHunks(file_path: string, baseBranch: string) {
     
     if (hunkHeader) {
       if (currentHunk) {
+        const commit = await git.log([`-L ${currentHunk.start_line},${currentHunk.end_line}:${file_path}`]);
+        const commit_id = commit?.latest?.hash;
+
         diffHunks.push({
           start_line: currentHunk.start_line,
           end_line: currentHunk.start_line + currentHunk.content.length - 1,
           content: currentHunk.content,
-          commit_id: commitSha,
+          commit_id: commit_id,
         });
       }
       currentHunk = {
@@ -71,14 +71,15 @@ export async function getGitDiffHunks(file_path: string, baseBranch: string) {
   }
 
   if (currentHunk) {
+    const commit = await git.log([`-L ${currentHunk.start_line},${currentHunk.end_line}:${file_path}`]);
+    
+    currentHunk.commit_id = commit?.latest?.hash;
     currentHunk.end_line = currentHunk.start_line + currentHunk.content.length - 1;
-    currentHunk.commit_id = commitSha;
     diffHunks.push(currentHunk);
   }
 
   const diffDetails: DiffDetails = {
     file_path,
-    commit_id: commitSha,
     hunks: diffHunks,
   };
 
