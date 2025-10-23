@@ -1,5 +1,6 @@
 import { logger, ModelReviewsOutput } from '../../lib/ai-utils';
 import { getAllDiffHunks } from '../graph-db-setup/neo4j-graph-github-query';
+import { MCPTools } from '../../lib/ai-tools/mcp-tools/mcp-tools';
 
 interface CommentBody {
   body: string;
@@ -12,7 +13,6 @@ interface CommentBody {
 
 
 export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[]) {
-  const token = process.env.GITHUB_TOKEN || '';
   const repoName = process.env.REPO_NAME || '';
   const prNumber = parseInt(process.env.PR_NUMBER || '0', 10) || 0;
 
@@ -20,71 +20,74 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
   
   const preparedComments = await prepareGitHubComments(reviews);
 
-  for (const comment of preparedComments) {
-    try {
-      logger.debug({ 
-        path: comment?.path, 
-        startLine: comment?.start_line, 
-        endLine: comment?.end_line,
-        commitId: comment?.commit_id 
-      }, 'Posting comment to GitHub');
-      
-      const commentBody: any = {
-        body: comment?.body,
-        commit_id: comment?.commit_id,
-        path: comment?.path,
-        side: 'RIGHT',
-      };
+  if (preparedComments.length === 0) {
+    logger.info('No comments to post');
+    return;
+  }
 
-      if (comment?.start_line && comment?.end_line && comment?.start_line !== comment?.end_line) {
-        commentBody.start_line = comment.start_line;
-        commentBody.line = comment.end_line;
-        commentBody.start_side = 'RIGHT';
-      } else {
-        commentBody.line = comment?.end_line || comment?.start_line;
-      }
+  try {
+    const githubTools = await MCPTools.getGitHubPRTools();
+    
+    const reviewWriteTool = githubTools.find(t => t.name === 'pull_request_review_write');
+    const addCommentTool = githubTools.find(t => t.name === 'add_comment_to_pending_review');
 
-      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/comments`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'X-GitHub-Api-Version': '2022-11-28'
-        },
-        body: JSON.stringify(commentBody)
-      });
+    if (!reviewWriteTool || !addCommentTool) {
+      logger.error('Required GitHub MCP tools not found');
+      return;
+    }
 
-      if (!response.ok) {
-        const errorData = await response.text();
-        logger.error(
-          { 
-            status: response.status, 
-            statusText: response.statusText, 
-            errorData, 
-            path: comment?.path,
-            owner,
-            repo,
-            prNumber
-          }, 
-          'GitHub API error when posting comment'
-        );
+    await reviewWriteTool.invoke({
+      method: 'create',
+      owner,
+      repo,
+      pullNumber: prNumber,
+    });
+
+    for (const comment of preparedComments) {
+      if (!comment) {
         continue;
       }
 
-      logger.info({ path: comment?.path, line: comment?.start_line }, 'Comment posted successfully');
-    } catch (error) {
-      logger.error(
-        { 
-          err: error, 
-          path: comment?.path, 
-          endLine: comment?.end_line,
+      try {
+        const commentArgs: any = {
           owner,
           repo,
-          prNumber
-        }, 
-        'Failed to post comment'
-      );
+          pullNumber: prNumber,
+          path: comment.path,
+          body: comment.body,
+          subjectType: 'LINE',
+          line: comment.end_line,
+          side: 'RIGHT',
+        };
+
+        if (comment.start_line && comment.end_line && comment.start_line !== comment.end_line) {
+          commentArgs.startLine = comment.start_line;
+          commentArgs.startSide = 'RIGHT';
+        }
+
+        await addCommentTool.invoke(commentArgs);
+      } catch (error) {
+        logger.error(
+          { 
+            err: error, 
+            path: comment.path, 
+            line: comment.end_line,
+          }, 
+          'Error adding comment to pending review'
+        );
+      }
     }
+
+    await reviewWriteTool.invoke({
+      method: 'submit_pending',
+      owner,
+      repo,
+      pullNumber: prNumber,
+      body: `Automated code review completed. ${preparedComments.length} issue(s) found.`,
+      event: 'COMMENT'
+    });
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to post PR review comments via MCP');
   }
 }
 
