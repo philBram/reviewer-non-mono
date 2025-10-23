@@ -53,6 +53,11 @@ jobs:
           ref: ${{ github.event.client_payload.branch }}
           path: repo_to_review
           token: ${{ secrets.CODE_REVIEWER_TOKEN }}
+          fetch-depth: 0
+
+      - name: Fetch base branch
+        working-directory: repo_to_review
+        run: git fetch origin ${{ github.event.client_payload.base_branch }}:${{ github.event.client_payload.base_branch }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

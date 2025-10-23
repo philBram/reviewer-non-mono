@@ -92,7 +92,7 @@ export class OrchestratorAgent {
 
     const callSetup = async (_state: typeof agentAnnotation.State) => {
       const branch = process.env.REPO_BRANCH || '';
-      const baseBranch = process.env.PR_BASE_BRANCH || '';
+      const baseBranch = process.env.PR_BASE_BRANCH || 'dev';
       await checkOutBranch(branch);
 
       const changedFiles = await getChangedFiles(baseBranch);
