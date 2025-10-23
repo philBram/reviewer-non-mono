@@ -42,9 +42,15 @@ async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
 
   const githubComments = diffHunks.flatMap(hunk => {
     const matchingReviews = reviews.map(review => {
+      const codeBlock = 
+      `\`\`\`typescript
+      ${review.code_suggestion}
+      \`\`\``;
+
       if (review.diff_id === hunk.id) {
         return {
-          body: review.suggestion + '\n\n' + review.code_suggestion + '\n\n' + review.type,
+          body: review.suggestion + '\n\n' + "Here's a suggested fix:" + 
+            '\n\n' + codeBlock + '\n\n' + review.type,
           commit_id: hunk.commit_id,
           path: hunk.source,
           start_line: hunk.start_line,
