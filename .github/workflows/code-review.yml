@@ -71,6 +71,8 @@ jobs:
       - name: Build TypeScript
         working-directory: reviewer-non-mono
         run: npm run build
+        env:
+          ESBUILD_EXTERNAL: "prettier"
 
       - name: Run code review
         working-directory: reviewer-non-mono
