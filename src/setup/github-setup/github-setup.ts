@@ -31,17 +31,23 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
     const reviewWriteTool = githubTools.find(t => t.name === 'pull_request_review_write');
     const addCommentTool = githubTools.find(t => t.name === 'add_comment_to_pending_review');
 
+    const firstComment = preparedComments[0];
+    const commitId = firstComment?.commit_id;
+
     if (!reviewWriteTool || !addCommentTool) {
       logger.error('Required GitHub MCP tools not found');
       return;
     }
 
-    await reviewWriteTool.invoke({
+    logger.info({ owner, repo, prNumber, commitId }, 'Creating pending review');
+    const createResult = await reviewWriteTool.invoke({
       method: 'create',
       owner,
       repo,
       pullNumber: prNumber,
+      commitID: commitId,
     });
+    logger.info({ result: createResult }, 'Pending review created');
 
     for (const comment of preparedComments) {
       if (!comment) {
@@ -66,6 +72,7 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
         }
 
         await addCommentTool.invoke(commentArgs);
+        logger.info({ commentArgs }, 'Comment added successfully');
       } catch (error) {
         logger.error(
           { 
@@ -78,7 +85,7 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
       }
     }
 
-    await reviewWriteTool.invoke({
+    const submitResult = await reviewWriteTool.invoke({
       method: 'submit_pending',
       owner,
       repo,
@@ -86,6 +93,7 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
       body: `Automated code review completed. ${preparedComments.length} issue(s) found.`,
       event: 'COMMENT'
     });
+    logger.info({ result: submitResult }, 'Review submitted successfully');
   } catch (error) {
     logger.error({ err: error }, 'Failed to post PR review comments via MCP');
   }
