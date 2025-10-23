@@ -95,7 +95,7 @@ export class OrchestratorAgent {
       const baseBranch = process.env.PR_BASE_BRANCH || '';
       await checkOutBranch(branch);
 
-      const changedFiles = await getChangedFiles();
+      const changedFiles = await getChangedFiles(baseBranch);
       const taskDetails = await getTaskDetails(branch);
       const relevantTaskDetails = {
         custom_id: taskDetails.custom_id,
@@ -106,7 +106,7 @@ export class OrchestratorAgent {
 
       const gitDiffHunks: DiffDetails[] = [];
       for (const filePath of changedFiles) {
-        const fileDiffHunks = await getGitDiffHunks(filePath);
+        const fileDiffHunks = await getGitDiffHunks(filePath, baseBranch);
         gitDiffHunks.push(fileDiffHunks);
       }
 

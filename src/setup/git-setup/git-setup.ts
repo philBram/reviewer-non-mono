@@ -24,21 +24,21 @@ export async function checkOutBranch(branchName: string) {
   await git.checkout(branchName);
 }
 
-export async function getChangedFiles() {
+export async function getChangedFiles(baseBranch: string) {
   const git = await getSimpleGitClient();
-  const raw = await git.diff(['--name-only', '--diff-filter=AM', `dev...HEAD`]);
+  const raw = await git.diff(['--name-only', '--diff-filter=AM', `${baseBranch}...HEAD`]);
   const files = raw.trim().split('\n').filter(Boolean);
   const filteredFiles = files.filter(file => !IGNORE_REGEX.test(file));
 
   return filteredFiles;
 }
 
-export async function getGitDiffHunks(file_path: string) {
+export async function getGitDiffHunks(file_path: string, baseBranch: string) {
   const git = await getSimpleGitClient();
   const commitSha = await git.revparse(['HEAD']);
 
   const diff = await git.diff([
-    `dev...HEAD`,
+    `${baseBranch}...HEAD`,
     '--no-color',
     '--',
     file_path,
