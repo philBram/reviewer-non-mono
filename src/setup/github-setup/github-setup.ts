@@ -6,6 +6,7 @@ import { Octokit } from 'octokit';
 export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[]) {
   const repoName = process.env.REPO_NAME || '';
   const prNumber = parseInt(process.env.PR_NUMBER || '0', 10) || 0;
+  const commitSha = process.env.COMMIT_SHA || '';
 
   const [owner, repo] = repoName.split('/');
   
@@ -25,7 +26,7 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
       repo: repo,
       pull_number: prNumber,
       body: comment.body,
-      commit_id: comment.commit_id,
+      commit_id: commitSha,
       path: comment.path,
       subject_type: 'file',
       headers: {
@@ -45,7 +46,6 @@ async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
           body: review.suggestion + '\n\n' + review.code_suggestion,
           commit_id: hunk.commit_id,
           path: hunk.source,
-          line: hunk.end_line,
         };
       }
 
