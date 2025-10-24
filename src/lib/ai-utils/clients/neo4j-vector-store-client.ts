@@ -1,23 +1,33 @@
 import { Neo4jVectorStore } from '@langchain/community/vectorstores/neo4j_vector';
 import { createEmbeddingModel, CreateEmbeddingModelOptions } from '../../ai-core';
+import { Mutex } from 'async-mutex';
 import { logger } from '../logger';
 
 export class Neo4jVectorStoreClient {
   private static _client: Neo4jVectorStore;
+  private static _mutex = new Mutex();
 
   private constructor() {}
 
   public static async getClient(createEmbeddingModelOptions: CreateEmbeddingModelOptions) {
-    if (!this._client) {
-      this._client = await this.initializeClient(createEmbeddingModelOptions);
+    if (this._client) {
+      return this._client;
     }
 
-    return this._client;
+    return this._mutex.runExclusive(async () => {
+      if (this._client) {
+        return this._client;
+      }
+
+      const client = await this.initializeClient(createEmbeddingModelOptions);
+      this._client = client;
+
+      return client;
+    });
   }
 
   private static async initializeClient(createEmbeddingModelOptions: CreateEmbeddingModelOptions) {
     try {
-      logger.debug('Initializing Neo4j Vector Store client');
       const config = {
         url: process.env.NEO4J_URL || '',
         username: process.env.NEO4J_USER || '',
@@ -46,6 +56,7 @@ export class Neo4jVectorStoreClient {
       );
       
       logger.info('Neo4j Vector Store client initialized successfully');
+
       return client;
     } catch (error) {
       logger.error({ err: error }, 'Error connecting to Neo4j Vector Store');

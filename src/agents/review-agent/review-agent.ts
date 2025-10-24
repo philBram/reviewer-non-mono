@@ -24,7 +24,7 @@ export class ReviewAgent extends BaseAgent {
 		this.tools = this.getTools();
 	}
 
-  private getTools() {
+  private getTools(): any[] {
 		return [
 			searchCode(),
 			getFileContent(),

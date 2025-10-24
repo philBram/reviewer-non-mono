@@ -1,17 +1,28 @@
 import weaviate, { WeaviateClient as Client } from 'weaviate-client';
+import { Mutex } from 'async-mutex';
 import { logger } from '../logger';
 
 export class WeaviateVectorClient {
   private static _client: Client;
+  private static _mutex = new Mutex();
 
   private constructor() {}
 
-  /*public static async getClient() {
-    if (!this._client) {
-      this._client = await this.initializeClient();
+  public static async getClient() {
+    if (this._client) {
+      return this._client;
     }
 
-    return this._client;
+    return this._mutex.runExclusive(async () => {
+      if (this._client) {
+        return this._client;
+      }
+
+      const client = await this.initializeClient();
+      this._client = client;
+
+      return client;
+    });
   }
 
   private static async initializeClient() {
@@ -36,5 +47,5 @@ export class WeaviateVectorClient {
       await this._client.close();
       logger.info('Weaviate client closed');
     }
-  }*/
+  }
 }

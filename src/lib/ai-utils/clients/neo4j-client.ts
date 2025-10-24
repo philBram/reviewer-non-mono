@@ -1,17 +1,28 @@
 import { Neo4jGraph } from '@langchain/community/graphs/neo4j_graph';
+import { Mutex } from 'async-mutex';
 import { logger } from '../logger';
 
 export class Neo4jClient {
   private static _client: Neo4jGraph;
+  private static _mutex = new Mutex();
 
   private constructor() {}
 
   public static async getClient() {
-    if (!this._client) {
-      this._client = await this.initializeClient();
+    if (this._client) {
+      return this._client;
     }
 
-    return this._client;
+    return this._mutex.runExclusive(async () => {
+      if (this._client) {
+        return this._client;
+      }
+
+      const client = await this.initializeClient();
+      this._client = client;
+
+      return client;
+    });
   }
 
   private static async initializeClient() {
