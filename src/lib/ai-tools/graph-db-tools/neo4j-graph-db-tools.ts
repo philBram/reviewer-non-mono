@@ -24,7 +24,7 @@ export class Neo4jGraphDbTools {
         const cypherQuery = `
           MATCH (d:DIFF_HUNK)
           WHERE d.source = $filePath OR d.source ENDS WITH $filePath
-          RETURN d.id AS id, d.name AS name, d.source AS source, d.start_line AS start_line, 
+          RETURN d.id AS id, d.source AS source, d.start_line AS start_line, 
                  d.end_line AS end_line, d.added_lines AS added_lines, 
                  d.removed_lines AS removed_lines, d.content AS content
           ORDER BY d.start_line ASC
@@ -59,7 +59,7 @@ export class Neo4jGraphDbTools {
         
         const cypherQuery = `
           MATCH (d:DIFF_HUNK {id: $diffId})
-          RETURN d.id AS id, d.name AS name, d.source AS source, d.start_line AS start_line, 
+          RETURN d.id AS id, d.source AS source, d.start_line AS start_line, 
                  d.end_line AS end_line, d.added_lines AS added_lines, 
                  d.removed_lines AS removed_lines, d.content AS content
         `;
@@ -79,47 +79,6 @@ export class Neo4jGraphDbTools {
       {
         name: 'find_diff_hunk',
         description: 'Retrieve a specific diff hunk by its unique ID.',
-        schema: schema,
-      }
-    );
-  }
-
-  findSimilarChanges() {
-    const schema = z.object({
-      diffId: z.string().describe('The diff ID to find similar changes for'),
-      topK: z.number().min(1).max(20).default(5).describe('Number of similar changes to return'),
-    });
-
-    return tool(
-      async (input) => {
-        const { diffId, topK } = schema.parse(input);
-        
-        const cypherQuery = `
-          MATCH (target:DIFF_HUNK {id: $diffId})
-          CALL db.index.vector.queryNodes('diff_vector_index', $topK, target.embedding)
-          YIELD node, score
-          WHERE node.id <> $diffId
-          RETURN node.id AS id, 
-                node.source AS source,
-                node.content AS content,
-                node.start_line AS start_line,
-                node.end_line AS end_line,
-                score
-          ORDER BY score DESC
-        `;
-        
-        const graph = await this.graphClient;
-        const result = await graph.query(cypherQuery, { diffId, topK });
-        
-        return JSON.stringify({
-          diff_id: diffId,
-          similar_changes: result,
-          message: 'These are semantically similar changes that might have been reviewed before'
-        }, null, 2);
-      },
-      {
-        name: 'find_similar_changes',
-        description: 'Find semantically similar code changes using vector embeddings. Useful for finding patterns, similar bugs, or past reviews of similar code changes.',
         schema: schema,
       }
     );

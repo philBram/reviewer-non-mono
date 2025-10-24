@@ -48,11 +48,13 @@ async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
       `\`\`\`typescript
       ${formatted}
       \`\`\``;
+      const body = 
+        review.suggestion + '\n\n' + review.type + '\n\n' + 
+        "Here's a suggested fix:" + '\n\n' + codeBlock;
 
-      if (review.diff_id === hunk.id) {
+      if (review.diff_id === hunk.id && review.suggestion != '') {
         return {
-          body: review.suggestion + '\n\n' + "Here's a suggested fix:" + 
-            '\n\n' + formatCode(codeBlock) + '\n\n' + '' + review.type,
+          body: body,
           commit_id: hunk.commit_id,
           path: hunk.source,
           start_line: hunk.start_line,

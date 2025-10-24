@@ -21,7 +21,8 @@ const review = z.object({
 
 const reviewChecker = z.object({
   is_acceptable: z.boolean().describe('Whether the review conclusion is acceptable (true) or needs a rework (false).'),
-  feedback: z.array(z.string()).describe('Feedback messages explaining the decision.'),
+  issues: z.array(z.string()).describe('List of specific issues found (empty if acceptable).'),
+  feedback: z.string().describe('Feedback messages explaining the decision. (<= 500 characters each)'),
 });
 
 export const securityScanSchema = 

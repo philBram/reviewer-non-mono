@@ -11,7 +11,7 @@ import { DiffDetails } from '../git-setup/git-setup';
 import { Neo4jClient, logger } from '../../lib/ai-utils';
 
 export class AstGraphDbSetup {
-  private readonly ignoreRegex = /node_modules|\/dist\/|\/build\/|\.spec\.ts$|\.d\.ts$|jest.*\.ts$|\.ya?ml$|\.json$/;
+  private readonly ignoreRegex = /node_modules|\/dist\/|\/build\/|\.spec\.ts$|\.d\.ts$|jest.*\.ts$|\.ya?ml$|\.json$|\.md$/;
   private readonly embeddingModel: Embeddings;
   private readonly project: Project;
   private readonly entityUuidMap = new Map<string, string>();
@@ -96,9 +96,9 @@ export class AstGraphDbSetup {
 
     for (const hunk of diffHunks) {
       const hunkOverlapsDecl = 
-        hunk.start_line <= declEndLine && hunk.end_line >= declStartLine ||
-        hunk.start_line >= declStartLine && hunk.end_line <= declEndLine;
-      
+        hunk.start_overlap <= declEndLine && hunk.end_overlap >= declStartLine ||
+        hunk.start_overlap >= declStartLine && hunk.end_overlap <= declEndLine;
+
       if (hunkOverlapsDecl) {
         const addedLines = hunk.content
           .filter(line => line.startsWith('+'))
@@ -109,8 +109,6 @@ export class AstGraphDbSetup {
           .map(line => line.slice(1));
 
         const diffContent = hunk.content.join('\n');
-        const contentEmbeddings = await this.embeddingModel.embedDocuments([diffContent]);
-        const embeddingVector = contentEmbeddings[0];
         const diffUuid = this.getOrCreateUuid('' + hunk.start_line + hunk.end_line, relativeRepoPath);
         const declInfo = await this.getDeclarationName(decl);
 
@@ -119,7 +117,6 @@ export class AstGraphDbSetup {
             id: diffUuid,
             type: 'DIFF_HUNK',
             properties: {
-              embedding: embeddingVector,
               content: diffContent,
               added_lines: addedLines,
               removed_lines: removedLines,
@@ -403,69 +400,42 @@ export class AstGraphDbSetup {
     }
   }
 
-  private async createVectorIndex() {
-    const graph = await this.getGraph();
-    const vectorIndex = 
-      { name: 'diff_vector_index', label: 'DIFF_HUNK', property: 'embedding' };
+  private async addNewFileNodes(documents: Document[], diffDetails: DiffDetails[], graphDocuments: GraphDocument[]) {
+    const document = new Set(documents.map(doc => path.relative(process.env.REPO_PATH || '', doc.metadata.source)));
+    const newFiles = diffDetails.filter(diff => !document.has(diff.file_path || ''));
 
-    const result = await graph.query(`
-      MATCH (h:${vectorIndex.label})
-      WHERE h.${vectorIndex.property} IS NOT NULL
-      RETURN h.${vectorIndex.property} AS embedding
-      LIMIT 1
-    `);
-    
-    const dimensions = result?.[0]?.embedding?.length;
-    
-    if (!dimensions) {
-      logger.debug('No embeddings found, skipping vector index creation');
-      return;
-    }
+    for (const diff of newFiles) {
+      for (const hunk of diff.hunks) {
+        const addedLines = hunk.content
+          .filter(line => line.startsWith('+'))
+          .map(line => line.slice(1));
+        const removedLines = hunk.content
+          .filter(line => line.startsWith('-'))
+          .map(line => line.slice(1));
+        const diffContent = hunk.content.join('\n');
 
-    try {
-      try {
-        await graph.query(`DROP INDEX ${vectorIndex.name}`);
-        logger.debug({ indexName: vectorIndex.name }, 'Dropped existing vector index');
-      } catch (_error) {
-        logger.debug('Vector index did not exist, proceeding to create new one');
+        graphDocuments.push(
+          new GraphDocument({
+            nodes: [
+              new Node({
+                id: uuidv4(),
+                type: 'NEW_FILE',
+                properties: {
+                  content: diffContent,
+                  added_lines: addedLines,
+                  removed_lines: removedLines,
+                  commit_id: hunk.commit_id,
+                  start_line: hunk.start_line,
+                  end_line: hunk.end_line,
+                  source: diff.file_path,
+                }
+              })
+            ],
+            relationships: [],
+            source: new Document({ pageContent: hunk.content.join('\n'), metadata: { source: diff.file_path || '' } }),
+          })
+        )
       }
-
-      await graph.query(`
-        CREATE VECTOR INDEX ${vectorIndex.name}
-        FOR (h:${vectorIndex.label})
-        ON h.${vectorIndex.property}
-        OPTIONS {indexConfig: {
-          \`vector.dimensions\`: ${dimensions},
-          \`vector.similarity_function\`: 'cosine'
-        }}
-      `);
-      logger.info({ indexName: vectorIndex, dimensions }, 'Vector index created successfully');
-    } catch (error) {
-      logger.error({ err: error, indexName: vectorIndex }, 'Error creating vector index');
-    }
-  }
-
-  private async createKeywordIndex() {
-    const graph = await this.getGraph();
-
-    const indexName = 'diff_keyword_index';
-
-    try {
-      try {
-        await graph.query(`DROP INDEX ${indexName}`);
-        logger.debug({ indexName }, 'Dropped existing index');
-      } catch (_error) {
-        logger.debug('Keyword index did not exist, proceeding to create new one');
-      }
-
-      await graph.query(`
-        CREATE FULLTEXT INDEX ${indexName}
-        FOR (n:DIFF_HUNK)
-        ON EACH [n.content, n.source]
-      `);
-      logger.info({ indexName }, 'Created fulltext index');
-    } catch (error) {
-      logger.error({ err: error, indexName }, 'Error creating keyword index');
     }
   }
 
@@ -485,13 +455,14 @@ export class AstGraphDbSetup {
 
     logger.debug('Parsing TypeScript files using ts-morph AST');
     const graphDocuments: GraphDocument[] = [];
-    
+
     for (const doc of documents) {
       const filePath = doc.metadata.source;
       const content = doc.pageContent;
       
       try {
         const graphDoc = await this.parseTypeScriptFile(filePath, diffDetails, content);
+
         if (graphDoc.nodes.length > 0) {
           graphDocuments.push(graphDoc);
         }
@@ -499,6 +470,8 @@ export class AstGraphDbSetup {
         logger.error({ err: error, filePath }, 'Error parsing TypeScript file');
       }
     }
+
+    await this.addNewFileNodes(documents, diffDetails, graphDocuments);
 
     const totalNodes = graphDocuments.reduce((sum, doc) => sum + doc.nodes.length, 0);
     const totalRelationships = graphDocuments.reduce((sum, doc) => sum + doc.relationships.length, 0);
@@ -511,9 +484,6 @@ export class AstGraphDbSetup {
     } catch (error) {
       logger.error({ err: error, nodeCount: totalNodes }, 'Error storing graph documents in Neo4j');
     }
-
-    await this.createVectorIndex();
-    await this.createKeywordIndex();
 
     logger.info({ nodes: totalNodes, relationships: totalRelationships }, 'Graph build complete');
   }

@@ -8,14 +8,16 @@ import { checkOutBranch, getChangedFiles, getGitDiffHunks } from '../../setup/gi
 import { DiffDetails } from '../../setup/git-setup/git-setup';
 import { getCodingGuidelines, getTaskDetails } from '../../setup/clickup-setup/clickup-setup';
 import { AstGraphDbSetup } from '../../setup/graph-db-setup/neo4j-graph-with-ast-setup';
-import { ModelJobsOutput, ModelReviewsOutput, ModelSecurityScanOutput } from '../../lib/ai-utils';
+import { ModelJobsOutput, ModelReviewCheckerOutput, ModelReviewsOutput, ModelSecurityScanOutput } from '../../lib/ai-utils';
 import { SecurityScannerAgent } from '../security-scanner-agent/security-scanner-agent';
+import { ReviewCheckerAgent } from '../review-checker-agent/review-checker-agent';
 
 export interface CreateOrchestratorModelsOptions {
   embeddingOpts: CreateEmbeddingModelOptions;
   plannerOpts: CreateModelOptions;
   reviewerOpts: CreateModelOptions;
   securityScannerOpts: CreateModelOptions;
+  reviewCheck?: boolean;
   runInParallel?: boolean;
   additionalSecurityScan?: boolean;
   recursionLimit?: number;
@@ -36,6 +38,7 @@ export class OrchestratorAgent {
   private readonly reviewerOpts: CreateModelOptions;
   private readonly securityScannerOpts: CreateModelOptions;
   private readonly embeddingOpts: CreateEmbeddingModelOptions;
+  private readonly reviewCheck: boolean;
   private readonly runInParallel: boolean;
   private readonly additionalSecurityScan: boolean;
   private readonly recursionLimit: number;
@@ -47,6 +50,7 @@ export class OrchestratorAgent {
     this.reviewerOpts = opts.reviewerOpts;
     this.securityScannerOpts = opts.securityScannerOpts;
     this.embeddingOpts = opts.embeddingOpts;
+    this.reviewCheck = opts.reviewCheck ?? false;
     this.runInParallel = opts.runInParallel ?? false;
     this.additionalSecurityScan = opts.additionalSecurityScan ?? false;
     this.recursionLimit = opts.recursionLimit ?? 25;
@@ -282,20 +286,59 @@ export class OrchestratorAgent {
       const results = await Promise.all(
         jobs.map(async (job) => {
           const reviewerAgent = new ReviewAgent(this.reviewerOpts, this.embeddingOpts);
-          const agent = await reviewerAgent.getAgent();
+          const reviewChecker = new ReviewCheckerAgent(this.reviewerOpts);
+          const reviewAgent = await reviewerAgent.getAgent();
+          const reviewCheckerAgent = await reviewChecker.getAgent();
+          const reviewHumanMessage = new HumanMessage(
+            `## Review Job\n${JSON.stringify(job, null, 2)}\n\n` +
+            `## Setup Context\n` +
+            `${JSON.stringify(state.setupContext, null, 2)}\n\n`
+          );
 
-          return agent.invoke({
+          let reviewResult = await reviewAgent.invoke({
             messages: [
+              reviewHumanMessage,
               new HumanMessage(
-                `## Review Job\n${JSON.stringify(job, null, 2)}\n\n` +
-                `## Setup Context\n` +
-                `${JSON.stringify(state.setupContext, null, 2)}\n`,
+                `## Review Check Feedback\n` +
+                `No feedback yet.`
               )
             ],
           },
           {
             recursionLimit: this.recursionLimit,
           });
+
+          if (this.reviewCheck) {
+            const reviewCheckerResult = await reviewCheckerAgent.invoke({
+              messages: [
+                new HumanMessage(
+                  `${JSON.stringify(reviewResult.messages, null, 2)}`
+                )
+              ],
+            });
+
+            const checkerOutput = reviewCheckerResult.modelOutput as ModelReviewCheckerOutput[];
+            const isAcceptable = checkerOutput[0].is_acceptable;
+            
+            if (isAcceptable) {
+              return reviewResult;
+            }
+
+            reviewResult = await reviewAgent.invoke({
+              messages: [
+                reviewHumanMessage,
+                new HumanMessage(
+                  `## Review Check Feedback\n` +
+                  `${JSON.stringify(checkerOutput, null, 2)}\n`
+                ),
+              ],
+            },
+            {
+              recursionLimit: this.recursionLimit,
+            });
+          }
+
+          return reviewResult;
         })
       );
 

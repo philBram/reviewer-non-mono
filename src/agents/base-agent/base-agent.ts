@@ -5,7 +5,7 @@ import { createAiModel, CreateModelOptions, ToolReadyChatModel, AiProvider } fro
 import { RunnableLambda } from '@langchain/core/runnables';
 import { z } from 'zod';
 import { MCPTools } from '../../lib/ai-tools';
-import { ModelJobsOutput, ModelReviewsOutput, ModelSecurityScanOutput, logger } from '../../lib/ai-utils';
+import { ModelJobsOutput, ModelReviewCheckerOutput, ModelReviewsOutput, ModelSecurityScanOutput, logger } from '../../lib/ai-utils';
 
 export enum AdditionalMCPTools {
   None = 'none',
@@ -57,7 +57,8 @@ export abstract class BaseAgent {
         ],
         reducer: messagesStateReducer
       }),
-      modelOutput: Annotation<ModelJobsOutput[] | ModelReviewsOutput[] | ModelSecurityScanOutput[]>({
+      modelOutput: Annotation<ModelJobsOutput[] | ModelReviewsOutput[] | 
+      ModelSecurityScanOutput[] | ModelReviewCheckerOutput[]>({
         default: () => [],
         reducer: (_x, y) => y,
       })
