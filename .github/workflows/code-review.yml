@@ -9,6 +9,21 @@ jobs:
     runs-on: ubuntu-latest
     
     services:
+      weaviate:
+        image: semitechnologies/weaviate:latest
+        env:
+          QUERY_DEFAULTS_LIMIT: 20
+          AUTHENTICATION_APIKEY_ENABLED: 'false'
+          PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+        options: >-
+          --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:8080/v1/.well-known/ready || exit 1"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 5
+        ports:
+          - 8080:8080
+          - 50051:50051
+
       neo4j:
         image: neo4j:latest
         env:
