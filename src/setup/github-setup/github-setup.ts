@@ -25,11 +25,11 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
       repo: repo,
       pull_number: prNumber,
       body: comment.body,
-      commit_id: comment.commit_id,
+      commit_id: comment.commitId,
       path: comment.path,
-      start_line: comment.start_line,
+      start_line: comment.startLine,
       start_side: 'RIGHT',
-      line: comment.end_line,
+      line: comment.endLine,
       side: 'RIGHT',
       headers: {
         'X-GitHub-Api-Version': '2022-11-28'
@@ -43,7 +43,7 @@ async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
 
   const githubComments = diffHunks.flatMap(hunk => {
     const matchingReviews = reviews.map(review => {
-      const formatted = formatCode(review.code_suggestion);
+      const formatted = formatCode(review.codeSuggestion);
       const codeBlock = 
       `\`\`\`typescript
       ${formatted}
@@ -52,13 +52,13 @@ async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
         review.suggestion + '\n\n' + review.type + '\n\n' + 
         "Here's a suggested fix:" + '\n\n' + codeBlock;
 
-      if (review.diff_id === hunk.id && review.suggestion != '') {
+      if (review.diffId === hunk.id && review.suggestion != '') {
         return {
           body: body,
-          commit_id: hunk.commit_id,
+          commitId: hunk.commitId,
           path: hunk.source,
-          start_line: hunk.start_line,
-          end_line: hunk.end_line,
+          startLine: hunk.startLine,
+          endLine: hunk.endLine,
         };
       }
 

@@ -34,7 +34,7 @@ export class WeaviateVectorDbTools {
             client: client,
             indexName: this.collectionName,
             textKey: 'text',
-            metadataKeys: ['name', 'type', 'parent', 'start_line', 'end_line', 'source'],
+            metadataKeys: ['name', 'type', 'parent', 'startLine', 'endLine', 'source'],
           }
         );
 

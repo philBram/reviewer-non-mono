@@ -26,9 +26,9 @@ export interface CreateOrchestratorModelsOptions {
 interface SetupContext {
   currentBranch: string;
   taskDetails: {
-    custom_id: string;
+    customId: string;
     name: string;
-    text_content: string;
+    textContent: string;
   };
   codingGuidelines: string;
 }
@@ -102,9 +102,9 @@ export class OrchestratorAgent {
       const changedFiles = await getChangedFiles(baseBranch);
       const taskDetails = await getTaskDetails(branch);
       const relevantTaskDetails = {
-        custom_id: taskDetails.custom_id,
+        customId: taskDetails.custom_id,
         name: taskDetails.name,
-        text_content: taskDetails.text_content,
+        textContent: taskDetails.text_content,
       };
       const codingGuidelines = await getCodingGuidelines();
 
@@ -114,12 +114,7 @@ export class OrchestratorAgent {
         gitDiffHunks.push(fileDiffHunks);
       }
 
-      await checkOutBranch(baseBranch);
-
       await this.graphDbSetup.buildGraph(gitDiffHunks);
-      //await this.vectorDbSetup.storeInWeaviate();
-
-      await checkOutBranch(branch);
 
       return { 
         setupContext: {
@@ -197,7 +192,7 @@ export class OrchestratorAgent {
       let securityFindings: ModelSecurityScanOutput[] = [];
       if (state.modelSecurityScanOutput.length > 0) {
         securityFindings = state.modelSecurityScanOutput.filter(
-          output => output.involved_file === changedFile
+          output => output.involvedFile === changedFile
         );
       }
 
@@ -233,7 +228,7 @@ export class OrchestratorAgent {
           let securityFindings = '';
           if (state.modelSecurityScanOutput.length > 0) {
             securityFindings = state.modelSecurityScanOutput
-              .find(output => output.involved_file === changedFile)?.results || '';
+              .find(output => output.involvedFile === changedFile)?.results || '';
           }
 
           return agent.invoke({
@@ -318,7 +313,7 @@ export class OrchestratorAgent {
             });
 
             const checkerOutput = reviewCheckerResult.modelOutput as ModelReviewCheckerOutput[];
-            const isAcceptable = checkerOutput[0].is_acceptable;
+            const isAcceptable = checkerOutput[0].isAcceptable;
             
             if (isAcceptable) {
               return reviewResult;

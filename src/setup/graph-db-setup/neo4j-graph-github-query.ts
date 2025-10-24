@@ -8,11 +8,11 @@ export async function getAllDiffHunks() {
     RETURN 
       d.id AS id,
       d.source AS source,
-      d.start_line AS start_line,
-      d.end_line AS end_line,
+      d.startLine AS startLine,
+      d.endLine AS endLine,
       d.content AS content,
-      d.commit_id AS commit_id
-    ORDER BY d.source, d.start_line ASC
+      d.commitId AS commitId
+    ORDER BY d.source, d.startLine ASC
   `;
 
   const results = await graph.query(cypherQuery, {});
@@ -20,9 +20,9 @@ export async function getAllDiffHunks() {
   return results.map(row => ({
     id: row.id,
     source: row.source,
-    start_line: row.start_line,
-    end_line: row.end_line,
+    startLine: row.startLine,
+    endLine: row.endLine,
     content: row.content,
-    commit_id: row.commit_id,
+    commitId: row.commitId,
   }));
 }

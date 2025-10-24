@@ -84,7 +84,7 @@ export class AstGraphDbSetup {
   }
 
   private async addDiffHunkNode(diffDetails: DiffDetails[], decl: Statement | MethodDeclaration, declUuid: string, relativeRepoPath: string, nodes: Node[], relationships: Relationship[]) {
-    const diffHunksForFile = diffDetails.filter(diff => diff.file_path === relativeRepoPath);
+    const diffHunksForFile = diffDetails.filter(diff => diff.filePath === relativeRepoPath);
     
     if (diffHunksForFile.length === 0) {
       return;
@@ -96,8 +96,8 @@ export class AstGraphDbSetup {
 
     for (const hunk of diffHunks) {
       const hunkOverlapsDecl = 
-        hunk.start_overlap <= declEndLine && hunk.end_overlap >= declStartLine ||
-        hunk.start_overlap >= declStartLine && hunk.end_overlap <= declEndLine;
+        hunk.startLine <= declEndLine && hunk.endLine >= declStartLine ||
+        hunk.startLine >= declStartLine && hunk.endLine <= declEndLine;
 
       if (hunkOverlapsDecl) {
         const addedLines = hunk.content
@@ -105,11 +105,11 @@ export class AstGraphDbSetup {
           .map(line => line.slice(1));
 
         const removedLines = hunk.content
-          .filter(line => line.startsWith('-'))
+          .filter(line => line.startsWith('_'))
           .map(line => line.slice(1));
 
         const diffContent = hunk.content.join('\n');
-        const diffUuid = this.getOrCreateUuid('' + hunk.start_line + hunk.end_line, relativeRepoPath);
+        const diffUuid = this.getOrCreateUuid('' + hunk.startLine + hunk.endLine, relativeRepoPath);
         const declInfo = await this.getDeclarationName(decl);
 
         nodes.push(
@@ -117,12 +117,13 @@ export class AstGraphDbSetup {
             id: diffUuid,
             type: 'DIFF_HUNK',
             properties: {
+              type: hunk.diffType,
               content: diffContent,
-              added_lines: addedLines,
-              removed_lines: removedLines,
-              commit_id: hunk.commit_id,
-              start_line: hunk.start_line,
-              end_line: hunk.end_line,
+              addedLines: addedLines,
+              removedLines: removedLines,
+              commitId: hunk.commitId,
+              startLine: hunk.startLine,
+              endLine: hunk.endLine,
               source: relativeRepoPath,
             }
           })
@@ -400,45 +401,6 @@ export class AstGraphDbSetup {
     }
   }
 
-  private async addNewFileNodes(documents: Document[], diffDetails: DiffDetails[], graphDocuments: GraphDocument[]) {
-    const document = new Set(documents.map(doc => path.relative(process.env.REPO_PATH || '', doc.metadata.source)));
-    const newFiles = diffDetails.filter(diff => !document.has(diff.file_path || ''));
-
-    for (const diff of newFiles) {
-      for (const hunk of diff.hunks) {
-        const addedLines = hunk.content
-          .filter(line => line.startsWith('+'))
-          .map(line => line.slice(1));
-        const removedLines = hunk.content
-          .filter(line => line.startsWith('-'))
-          .map(line => line.slice(1));
-        const diffContent = hunk.content.join('\n');
-
-        graphDocuments.push(
-          new GraphDocument({
-            nodes: [
-              new Node({
-                id: uuidv4(),
-                type: 'NEW_FILE',
-                properties: {
-                  content: diffContent,
-                  added_lines: addedLines,
-                  removed_lines: removedLines,
-                  commit_id: hunk.commit_id,
-                  start_line: hunk.start_line,
-                  end_line: hunk.end_line,
-                  source: diff.file_path,
-                }
-              })
-            ],
-            relationships: [],
-            source: new Document({ pageContent: hunk.content.join('\n'), metadata: { source: diff.file_path || '' } }),
-          })
-        )
-      }
-    }
-  }
-
   async clearGraph() {
     const graph = await this.getGraph();
     await graph.query('MATCH (n) DETACH DELETE n');
@@ -470,8 +432,6 @@ export class AstGraphDbSetup {
         logger.error({ err: error, filePath }, 'Error parsing TypeScript file');
       }
     }
-
-    await this.addNewFileNodes(documents, diffDetails, graphDocuments);
 
     const totalNodes = graphDocuments.reduce((sum, doc) => sum + doc.nodes.length, 0);
     const totalRelationships = graphDocuments.reduce((sum, doc) => sum + doc.relationships.length, 0);

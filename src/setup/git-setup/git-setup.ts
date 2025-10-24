@@ -5,17 +5,16 @@ import { ar } from 'zod/v4/locales';
 const IGNORE_REGEX = /node_modules|\/dist\/|\/build\/|\.spec\.ts$|\.d\.ts$|jest.*\.ts$|\.ya?ml$|\.json$|\.md$/;
 
 export interface DiffDetails {
-  file_path?: string;
+  filePath?: string;
   hunks: DiffHunks[];
 }
 
 interface DiffHunks {
-  start_line: number;
-  end_line: number;
-  start_overlap: number;
-  end_overlap: number;
+  startLine: number;
+  endLine: number;
+  diffType: string;
   content: string[];
-  commit_id?: string;
+  commitId?: string;
 }
 
 async function getSimpleGitClient() {
@@ -36,10 +35,10 @@ export async function getChangedFiles(baseBranch: string) {
   return filteredFiles;
 }
 
-export async function getGitDiffHunks(file_path: string, baseBranch: string) {
-  if (IGNORE_REGEX.test(file_path)) {
+export async function getGitDiffHunks(filePath: string, baseBranch: string) {
+  if (IGNORE_REGEX.test(filePath)) {
     return {
-      file_path,
+      filePath,
       hunks: [],
     };
   }
@@ -50,7 +49,7 @@ export async function getGitDiffHunks(file_path: string, baseBranch: string) {
     '--no-color',
     '--unified=0',
     '--',
-    file_path,
+    filePath,
   ]);
 
   const diffHunks: DiffHunks[] = [];
@@ -61,26 +60,35 @@ export async function getGitDiffHunks(file_path: string, baseBranch: string) {
     
     if (hunkHeader) {
       if (currentHunk) {
-        const end_line = currentHunk.end_line;
-        const commit = await git.log([`-L ${currentHunk.start_line},${end_line}:${file_path}`]);
-        const commit_id = commit?.latest?.hash;
+        const endLine = currentHunk.endLine;
+        const commit = await git.log([`-L ${currentHunk.startLine},${endLine}:${filePath}`]);
+        const commitId = commit?.latest?.hash;
+        const oldStart = parseInt(hunkHeader[1], 10);
+        const oldCount = parseInt(hunkHeader[2] || '1', 10);
+        const newStart = parseInt(hunkHeader[3], 10);
+        const newCount = parseInt(hunkHeader[4] || '1', 10);
+
+        if (oldStart === 0 && oldCount === 0) {
+          currentHunk.diffType = 'ADDED';
+        } else {
+          currentHunk.diffType = 'MODIFIED';
+        }
 
         diffHunks.push({
-          start_line: currentHunk.start_line,
-          end_line: end_line,
-          start_overlap: currentHunk.start_overlap,
-          end_overlap: currentHunk.end_overlap,
+          startLine: newStart,
+          endLine: newCount,
+          diffType: currentHunk.diffType,
           content: currentHunk.content,
-          commit_id: commit_id,
+          commitId: commitId,
         });
       }
       currentHunk = {
-        start_line: parseInt(hunkHeader[3], 10),
-        end_line: parseInt(hunkHeader[3], 10) + (parseInt(hunkHeader[4], 10) || 1) - 1,
-        start_overlap: parseInt(hunkHeader[1], 10),
-        end_overlap: parseInt(hunkHeader[1], 10) + (parseInt(hunkHeader[2], 10) || 1) - 1,
+        startLine: 0,
+        endLine: 0,
+        diffType: '',
         content: [],
       };
+
       continue;
     }
     if (currentHunk) {
@@ -89,15 +97,15 @@ export async function getGitDiffHunks(file_path: string, baseBranch: string) {
   }
 
   if (currentHunk) {
-    const end_line = currentHunk.end_line;
-    const commit = await git.log([`-L ${currentHunk.start_line},${end_line}:${file_path}`]);
+    const endLine = currentHunk.endLine;
+    const commit = await git.log([`-L ${currentHunk.startLine},${endLine}:${filePath}`]);
 
-    currentHunk.commit_id = commit?.latest?.hash;
+    currentHunk.commitId = commit?.latest?.hash;
     diffHunks.push(currentHunk);
   }
 
   const diffDetails: DiffDetails = {
-    file_path,
+    filePath,
     hunks: diffHunks,
   };
 

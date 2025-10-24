@@ -1,26 +1,26 @@
 import { z } from 'zod';
 
 const securityScan = z.object({
-  involved_file: z.string().describe('File path where the issue is located.'),
+  involvedFile: z.string().describe('File path where the issue is located.'),
   results: z.string().describe('Summary of security findings identified in the file or empty if none.'),
 });
 
 const job = z.object({
-  diff_id: z.string().describe('The unique ID of the diff hunk'),
+  diffId: z.string().describe('The unique ID of the diff hunk'),
   reason: z.string().describe('security|guidelines|impact|mixed'),
   summary: z.string().describe('Brief explanation of why this change was flagged (<= 300 chars prefered)'),
   impacted: z.boolean().default(false).describe('Whether planner found this hunk has impact (affects multiple declarations). If true, reviewer can skip find_impacted_declarations to save cost.'),
 });
 
 const review = z.object({
-  diff_id: z.string().describe('The unique ID of the diff hunk'),
+  diffId: z.string().describe('The unique ID of the diff hunk'),
   suggestion: z.string().describe('Actionable feedback (prefer <= 300 characters)'),
-  code_suggestion: z.string().describe('Short code suggestion that illustrates a possible fix (prefer <= 10 lines).'),
+  codeSuggestion: z.string().describe('Short code suggestion that illustrates a possible fix (prefer <= 10 lines).'),
   type: z.enum(['blocker', 'comment']).describe('Severity/type of the feedback.'),
 });
 
 const reviewChecker = z.object({
-  is_acceptable: z.boolean().describe('Whether the review conclusion is acceptable (true) or needs a rework (false).'),
+  isAcceptable: z.boolean().describe('Whether the review conclusion is acceptable (true) or needs a rework (false).'),
   issues: z.array(z.string()).describe('List of specific issues found (empty if acceptable).'),
   feedback: z.string().describe('Feedback messages explaining the decision. (<= 500 characters each)'),
 });

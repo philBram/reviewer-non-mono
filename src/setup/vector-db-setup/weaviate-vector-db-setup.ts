@@ -65,8 +65,8 @@ export class WeaviateVectorDbSetup {
           name: className,
           type: 'CLASS',
           parent: '',
-          start_line: cls.getStartLineNumber(),
-          end_line: cls.getEndLineNumber(),
+          startLine: cls.getStartLineNumber(),
+          endLine: cls.getEndLineNumber(),
           source: relativeRepoPath,
         }
       }));
@@ -80,8 +80,8 @@ export class WeaviateVectorDbSetup {
             name: methodName,
             type: 'METHOD',
             parent: className,
-            start_line: method.getStartLineNumber(),
-            end_line: method.getEndLineNumber(),
+            startLine: method.getStartLineNumber(),
+            endLine: method.getEndLineNumber(),
             source: relativeRepoPath,
           }
         }));
@@ -101,8 +101,8 @@ export class WeaviateVectorDbSetup {
           name: interfaceName,
           type: 'INTERFACE',
           parent: '',
-          start_line: iface.getStartLineNumber(),
-          end_line: iface.getEndLineNumber(),
+          startLine: iface.getStartLineNumber(),
+          endLine: iface.getEndLineNumber(),
           source: relativeRepoPath,
         }
       }));
@@ -121,8 +121,8 @@ export class WeaviateVectorDbSetup {
           name: functionName,
           type: 'FUNCTION',
           parent: '',
-          start_line: func.getStartLineNumber(),
-          end_line: func.getEndLineNumber(),
+          startLine: func.getStartLineNumber(),
+          endLine: func.getEndLineNumber(),
           source: relativeRepoPath,
         }
       }));
@@ -180,7 +180,7 @@ export class WeaviateVectorDbSetup {
           client: client,
           indexName: this.collectionName,
           textKey: 'text',
-          metadataKeys: ['name', 'type', 'parent', 'start_line', 'end_line', 'source'],
+          metadataKeys: ['name', 'type', 'parent', 'startLine', 'endLine', 'source'],
         }
       );
 

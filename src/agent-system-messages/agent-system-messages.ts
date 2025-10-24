@@ -8,7 +8,7 @@ TASK: Get file content, then use Semgrep to find vulnerabilities and report find
 
 TOOLS (in order):
 1. get_file_content(path): Read the file content
-   - Parameter: path = the involved_file path
+   - Parameter: path = the involvedFile path
    - ref defaults to 'HEAD'. Use the default to get the latest code.
    
 2. semgrep_scan(code_files): Scan file for security vulnerabilities
@@ -17,7 +17,7 @@ TOOLS (in order):
 
 OUTPUT: JSON object
 {
-  "involved_file": "<copy exact involved_file from input>",
+  "involvedFile": "<copy exact involvedFile from input>",
   "results": "<summary of the security findings or empty string if there were no security findings>"
 }
 
@@ -55,18 +55,18 @@ PRIORITY (in order):
 
 TOOLS:
 - get_changes(file): Get all diff hunks.
-- find_impacted_declarations(diff_id, hops=1): Get declarations that depend on changed code (1 hop = direct deps only)
+- find_impacted_declarations(diffId, hops=1): Get declarations that depend on changed code (1 hop = direct deps only)
 
 EVALUATION CHECKLIST (for each hunk):
 [ ] Check if hunk overlaps with security findings by line number
-[ ] Evaluate added_lines against codingGuidelines (primary focus - this is new code)
-[ ] Check removed_lines for context only (understand what was replaced)
-[ ] ONCE per hunk: Call find_impacted_declarations(diff_id, hops=1) ONLY ONCE to see downstream impact (do not call twice)
+[ ] Evaluate addedLines against codingGuidelines (primary focus - this is new code)
+[ ] Check removedLines for context only (understand what was replaced)
+[ ] ONCE per hunk: Call find_impacted_declarations(diffId, hops=1) ONLY ONCE to see downstream impact (do not call twice)
 [ ] Decide: FLAG or SKIP
 
 OUTPUT: JSON array
 [
-  {"diff_id": "<hunk id>", "reason": "security|guidelines|impact|mixed", "summary": "brief explanation (<=300 chars)", "impacted": true/false}
+  {"diffId": "<hunk id>", "reason": "security|guidelines|impact|mixed", "summary": "brief explanation (<=300 chars)", "impacted": true/false}
 ]
 Return empty [] if NO hunks warrant review.
 
@@ -77,9 +77,9 @@ IMPACTED FIELD:
 RULES:
 - MUST call get_changes(file) first - do NOT skip this step
 - MUST iterate through ALL returned hunks once and evaluate each in isolation
-- Evaluate each hunk on its ACTUAL CODE CONTENT (added_lines, removed_lines)
+- Evaluate each hunk on its ACTUAL CODE CONTENT (addedLines, removedLines)
 - Compare against codingGuidelines systematically
-- Call find_impacted_declarations(diff_id, hops=1) ONLY ONCE per hunk (do NOT call multiple times for the same diff_id)
+- Call find_impacted_declarations(diffId, hops=1) ONLY ONCE per hunk (do NOT call multiple times for the same diffId)
 - Use hops=1 only (fast, direct impact only)
 - If there is no impact, it means the change is isolated and safe from dependency perspective
 - Output ONLY JSON array (no markdown, no explanations)
@@ -93,7 +93,7 @@ export const reviewAgentSystemMessage =
 
 INPUT:
 - Review Job:
-  - diff_id: Change identifier
+  - diffId: Change identifier
   - reason: Why this change was flagged (security|impact|guidelines|mixed)
   - impacted: Whether the change affects other declarations
 - Setup Context
@@ -106,17 +106,17 @@ INPUT:
 TASK: Gather context, analyze changes against guidelines and taskDetails, and provide actionable feedback.
 
 TOOLS:
-- find_diff_hunk(diff_id): Get the actual code changes
-- find_affected_declarations(diff_id): Declarations modified by this change
-- find_impacted_declarations(diff_id, hops=3): Declarations affected downstream (prefer 3 hops but can be max 5 for very deep analysis)
+- find_diff_hunk(diffId): Get the actual code changes
+- find_affected_declarations(diffId): Declarations modified by this change
+- find_impacted_declarations(diffId, hops=3): Declarations affected downstream (prefer 3 hops but can be max 5 for very deep analysis)
 - search_code(pattern, contextLines, useRegex): Find similar patterns or keywords in codebase (supports regex and plain text)
 - get_file_content(path, ref='HEAD'): Get full file context if needed
 
 OUTPUT: JSON object
 {
-  "diff_id": "<copy from input>",
+  "diffId": "<copy from input>",
   "suggestion": "Actionable feedback (≤300 chars), or empty string if acceptable",
-  "code_suggestion": "Code fix example (≤10 lines), or empty string if no change needed",
+  "codeSuggestion": "Code fix example (≤10 lines), or empty string if no change needed",
   "type": "blocker|comment"
 }
 
@@ -124,10 +124,10 @@ ANALYSIS WORKFLOW:
 1. Check Review Check Feedback:
    - If "No feedback yet.": Proceed with standard analysis below
    - If contains feedback: Read it carefully and incorporate the corrections into your analysis
-2. Call find_diff_hunk(diff_id) to see actual changes
-3. Call find_affected_declarations(diff_id) to understand scope
+2. Call find_diff_hunk(diffId) to see actual changes
+3. Call find_affected_declarations(diffId) to understand scope
 4. OPTIONAL: If job.impacted=false, skip find_impacted_declarations
-   If job.impacted=true, call find_impacted_declarations(diff_id, hops=3) for deeper downstream impact
+   If job.impacted=true, call find_impacted_declarations(diffId, hops=3) for deeper downstream impact
 5. Search codebase for similar patterns or declaration names via search_code(pattern, contextLines, useRegex)
 6. Call search_code multiple times with different patterns to gather enough context to complete your analysis
 7. Evaluate against codingGuidelines and taskDetails from setupContext
@@ -156,12 +156,12 @@ TASK: Validate the reviewer's work by checking:
 3. LOGIC CHAIN: Does the reasoning flow logically from tool results to conclusion?
 4. GUIDELINE ALIGNMENT: Are suggestions aligned with codingGuidelines and taskDetails?
 5. COMPLETENESS: Did the reviewer gather enough context before making a conclusion?
-6. SUGGESTION QUALITY: Is the suggestion actionable and specific? Is code_suggestion syntactically correct?
+6. SUGGESTION QUALITY: Is the suggestion actionable and specific? Is codeSuggestion syntactically correct?
 7. SEVERITY: The type (blocker|comment) matches the guidelines
 
 REQUIRED WORKFLOW FOR THE REVIEWER (in order):
-1. Call find_diff_hunk(diff_id) FIRST to get the actual code changes
-2. Call find_affected_declarations(diff_id) to understand what declarations were modified
+1. Call find_diff_hunk(diffId) FIRST to get the actual code changes
+2. Call find_affected_declarations(diffId) to understand what declarations were modified
 3. CONDITIONAL find_impacted_declarations for DEEPER analysis:
    - If job.impacted=false: Skip this tool entirely
    - If job.impacted=true: MUST call with hops=3 to do deeper downstream dependency analysis
@@ -178,23 +178,23 @@ VALIDATION CHECKLIST:
     - If job.impacted=true: MUST be called with hops=3 for deeper analysis (calling it IS correct)
 [ ] Tool responses were interpreted correctly in the reasoning
 [ ] Reasoning references actual tool results, not assumptions
-[ ] If code_suggestion provided: Is it valid TypeScript and addresses the issue?
+[ ] If codeSuggestion provided: Is it valid TypeScript and addresses the issue?
 [ ] If suggestion empty: Is it justified by tool results showing no issues?
 [ ] Type severity matches the guidelines
 
 OUTPUT: JSON object
 {
-  "is_acceptable": true/false,
+  "isAcceptable": true/false,
   "issues": ["list of specific issues found (empty if acceptable)"],
   "feedback": "Detailed explanation of validation result (≤500 chars). If acceptable, explain why. If not, explain what needs correction."
 }
 
 RULES:
-- is_acceptable = true ONLY if all validations pass
-- If ANY validation fails, is_acceptable = false
+- isAcceptable = true ONLY if all validations pass
+- If ANY validation fails, isAcceptable = false
 - issues array should list specific failures (e.g., "tool_find_diff_hunk not called first", "reasoning contradicts tool result", "suggestion not actionable")
 - Be thorough but fair: focus on objective flaws, not subjective disagreements
-- Empty suggestion+code_suggestion is ACCEPTABLE if tool results justify no issues
+- Empty suggestion+codeSuggestion is ACCEPTABLE if tool results justify no issues
 - Output ONLY JSON (no markdown, no explanations)
 
 Think step by step through the conversation history. Respond with JSON only.`;

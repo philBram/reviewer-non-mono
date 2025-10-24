@@ -24,16 +24,16 @@ export class Neo4jGraphDbTools {
         const cypherQuery = `
           MATCH (d:DIFF_HUNK)
           WHERE d.source = $filePath OR d.source ENDS WITH $filePath
-          RETURN d.id AS id, d.source AS source, d.start_line AS start_line, 
-                 d.end_line AS end_line, d.added_lines AS added_lines, 
-                 d.removed_lines AS removed_lines, d.content AS content
-          ORDER BY d.start_line ASC
+          RETURN d.id AS id, d.diffType AS diffType, d.source AS source, d.startLine AS startLine, 
+                 d.endLine AS endLine, d.addedLines AS addedLines, 
+                 d.removedLines AS removedLines, d.content AS content
+          ORDER BY d.startLine ASC
         `;
         
         const results = await graph.query(cypherQuery, { filePath });
 
         return JSON.stringify({
-          file_path: filePath,
+          filePath: filePath,
           count: results.length,
           changes: results,
         }, null, 2);
@@ -59,9 +59,9 @@ export class Neo4jGraphDbTools {
         
         const cypherQuery = `
           MATCH (d:DIFF_HUNK {id: $diffId})
-          RETURN d.id AS id, d.source AS source, d.start_line AS start_line, 
-                 d.end_line AS end_line, d.added_lines AS added_lines, 
-                 d.removed_lines AS removed_lines, d.content AS content
+          RETURN d.id AS id, d.diffType AS diffType, d.source AS source, d.startLine AS startLine, 
+                 d.endLine AS endLine, d.addedLines AS addedLines, 
+                 d.removedLines AS removedLines, d.content AS content
         `;
         
         const results = await graph.query(cypherQuery, { diffId });
@@ -106,7 +106,7 @@ export class Neo4jGraphDbTools {
                    source: inherited.source,
                    relationship: type(r1)
                  })
-               END as extends_or_implements,
+               END as extendsOrImplements,
                CASE 
                  WHEN collect(DISTINCT member) = [] THEN "no contained members"
                  ELSE collect(DISTINCT {
@@ -115,13 +115,13 @@ export class Neo4jGraphDbTools {
                    source: member.source,
                    relationship: type(r2)
                  })
-               END as contains_members
+               END as containsMembers
           RETURN collect({
             type: labels(decl)[0],
             name: decl.name,
             source: decl.source,
-            extends_or_implements: extends_or_implements,
-            contains_members: contains_members
+            extendsOrImplements: extendsOrImplements,
+            containsMembers: containsMembers
           }) as declarations
         `;
         
@@ -136,8 +136,8 @@ export class Neo4jGraphDbTools {
         }
 
         return JSON.stringify({
-          diff_id: diffId,
-          affected_declarations: result[0].declarations,
+          diffId: diffId,
+          affectedDeclarations: result[0].declarations,
         }, null, 2);
       },
       {
@@ -168,25 +168,25 @@ export class Neo4jGraphDbTools {
                    name: dependent.name,
                    type: labels(dependent)[0],
                    source: dependent.source,
-                   hops_away: length(path)
+                   hopsAway: length(path)
                  })
-               END as impacted_declarations
+               END as impactedDeclarations
           RETURN {
-            changed_declaration: decl.name,
-            changed_type: labels(decl)[0],
-            changed_source: decl.source,
-            impacted_declarations: impacted_declarations
-          } as impact_analysis
+            changedDeclaration: decl.name,
+            changedType: labels(decl)[0],
+            changedSource: decl.source,
+            impactedDeclarations: impactedDeclarations
+          } as impactAnalysis
         `;
         
         const graph = await this.graphClient;
         const result = await graph.query(cypherQuery, { diffId });
         
         return JSON.stringify({
-          diff_id: diffId,
+          diffId: diffId,
           hops: hops,
-          impact_analysis: result.length > 0 ? result[0].impact_analysis : null,
-          message: result.length === 0 || result[0].impact_analysis.impacted_declarations === 'no impacted declarations'
+          impactAnalysis: result.length > 0 ? result[0].impactAnalysis : null,
+          message: result.length === 0 || result[0].impactAnalysis.impactedDeclarations === 'no impacted declarations'
             ? `No declarations found that depend on this change within ${hops} hop(s). This change may be isolated or internal.`
             : undefined
         }, null, 2);

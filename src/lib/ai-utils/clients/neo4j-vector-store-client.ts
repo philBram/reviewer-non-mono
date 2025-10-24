@@ -36,16 +36,16 @@ export class Neo4jVectorStoreClient {
         keywordIndexName: 'diff_keyword_index',
         searchType: 'hybrid' as const,
         nodeLabel: 'DIFF_HUNK',
-        textNodeProperties: ['id', 'content', 'added_lines', 'removed_lines', 'start_line', 'end_line', 'source'],
+        textNodeProperties: ['id', 'content', 'addedLines', 'removedLines', 'startLine', 'endLine', 'source'],
         embeddingNodeProperty: 'embedding',
         retrievalQuery: `
           RETURN node.content AS text, 
             node.id AS id,
             node.source AS source, 
-            node.start_line AS start_line, 
-            node.end_line AS end_line, 
-            node.added_lines AS added_lines, 
-            node.removed_lines AS removed_lines,
+            node.startLine AS startLine, 
+            node.endLine AS endLine, 
+            node.addedLines AS addedLines, 
+            node.removedLines AS removedLines,
             score
         `
       };
