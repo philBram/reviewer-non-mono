@@ -6,7 +6,7 @@ export class WeaviateVectorClient {
 
   private constructor() {}
 
-  public static async getClient() {
+  /*public static async getClient() {
     if (!this._client) {
       this._client = await this.initializeClient();
     }
@@ -36,5 +36,5 @@ export class WeaviateVectorClient {
       await this._client.close();
       logger.info('Weaviate client closed');
     }
-  }
+  }*/
 }

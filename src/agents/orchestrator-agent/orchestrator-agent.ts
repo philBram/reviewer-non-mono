@@ -9,7 +9,7 @@ import { DiffDetails } from '../../setup/git-setup/git-setup';
 import { getCodingGuidelines, getTaskDetails } from '../../setup/clickup-setup/clickup-setup';
 import { AstGraphDbSetup } from '../../setup/graph-db-setup/neo4j-graph-with-ast-setup';
 import { ModelJobsOutput, ModelReviewsOutput, ModelSecurityScanOutput } from '../../lib/ai-utils';
-import { SecurityScannerAgent } from '../security-checker-agent/security-scanner-agent';
+import { SecurityScannerAgent } from '../security-scanner-agent/security-scanner-agent';
 
 export interface CreateOrchestratorModelsOptions {
   embeddingOpts: CreateEmbeddingModelOptions;

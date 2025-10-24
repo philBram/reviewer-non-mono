@@ -1,17 +1,4 @@
 services:
-  weaviate:
-    image: cr.weaviate.io/semitechnologies/weaviate:latest
-    container_name: weaviate
-    ports:
-      - "8080:8080"
-      - "50051:50051"
-    environment:
-      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
-      DEFAULT_VECTORIZER_MODULE: 'none'
-      ENABLE_MODULES: ''
-      CLUSTER_HOSTNAME: 'node1'
-    restart: unless-stopped
-
   neo4j:
     image: neo4j:latest
     container_name: neo4j

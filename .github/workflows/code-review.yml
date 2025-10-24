@@ -23,22 +23,6 @@ jobs:
         ports:
           - 7474:7474
           - 7687:7687
-      
-      weaviate:
-        image: cr.weaviate.io/semitechnologies/weaviate:latest
-        env:
-          AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
-          DEFAULT_VECTORIZER_MODULE: 'none'
-          ENABLE_MODULES: ''
-          CLUSTER_HOSTNAME: 'node1'
-        options: >-
-          --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:8080/v1/.well-known/ready || exit 1"
-          --health-interval 15s
-          --health-timeout 10s
-          --health-retries 10
-        ports:
-          - 8080:8080
-          - 50051:50051
 
     steps:
       - name: Checkout code reviewer repository

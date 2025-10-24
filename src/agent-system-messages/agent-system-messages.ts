@@ -1,4 +1,4 @@
-export const securityCheckerAgentSystemMessage = 
+export const securityScannerAgentSystemMessage = 
 `You are a senior security expert. Scan code for security vulnerabilities using Semgrep.
 
 INPUT:

@@ -59,7 +59,6 @@ export async function main() {
 		throw error;
 	}
 	finally {
-		await WeaviateVectorClient.close();
 		await Neo4jVectorStoreClient.close();
 		await Neo4jClient.close();
 		await MCPTools.close();
