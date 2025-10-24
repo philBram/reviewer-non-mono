@@ -8,8 +8,9 @@ import { postPullRequestReviewComments } from './setup/github-setup/github-setup
 dotenv.config();
 
 export async function main() {
-	const recursionLimit = 50;
+	const reviewCheck = true;
 	const runInParallel = true;
+	const recursionLimit = 50;
 	const additionalSecurityScan = false;
 
 	const createOrchestratorModelsOptions = {
@@ -28,6 +29,7 @@ export async function main() {
 			provider: AiProvider.Azure,
 			temperature: 0.3
 		},
+		reviewCheck,
 		runInParallel,
 		additionalSecurityScan,
 		recursionLimit,
