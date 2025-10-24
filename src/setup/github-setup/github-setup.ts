@@ -1,3 +1,4 @@
+import { IndentationText, Project } from 'ts-morph';
 import { logger, ModelReviewsOutput } from '../../lib/ai-utils';
 import { getAllDiffHunks } from '../graph-db-setup/neo4j-graph-github-query';
 import { Octokit } from 'octokit';
@@ -42,15 +43,16 @@ async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
 
   const githubComments = diffHunks.flatMap(hunk => {
     const matchingReviews = reviews.map(review => {
+      const formatted = formatCode(review.code_suggestion);
       const codeBlock = 
       `\`\`\`typescript
-      ${review.code_suggestion}
+      ${formatted}
       \`\`\``;
 
       if (review.diff_id === hunk.id) {
         return {
           body: review.suggestion + '\n\n' + "Here's a suggested fix:" + 
-            '\n\n' + codeBlock + '\n\n' + review.type,
+            '\n\n' + formatCode(codeBlock) + '\n\n' + '' + review.type,
           commit_id: hunk.commit_id,
           path: hunk.source,
           start_line: hunk.start_line,
@@ -65,4 +67,18 @@ async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
   });
 
   return githubComments;
+}
+
+export function formatCode(code: string) {
+  const project = new Project({
+    useInMemoryFileSystem: true,
+    manipulationSettings: { indentationText: IndentationText.TwoSpaces },
+  });
+
+  const sf = project.createSourceFile('tmp.ts', code, { overwrite: true });
+  sf.formatText();
+  const formatted = sf.getFullText();
+  project.removeSourceFile(sf);
+
+  return formatted;
 }

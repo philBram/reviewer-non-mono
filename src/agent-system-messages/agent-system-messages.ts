@@ -136,3 +136,6 @@ COST OPTIMIZATION:
 - search_code is fast and provides immediate results with surrounding context lines
 
 Think step by step and respond with JSON only.`;
+
+export const reviewCheckerAgentSystemMessage =
+`?`;

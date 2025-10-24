@@ -19,6 +19,11 @@ const review = z.object({
   type: z.enum(['blocker', 'comment']).describe('Severity/type of the feedback.'),
 });
 
+const reviewChecker = z.object({
+  is_acceptable: z.boolean().describe('Whether the review conclusion is acceptable (true) or needs a rework (false).'),
+  feedback: z.array(z.string()).describe('Feedback messages explaining the decision.'),
+});
+
 export const securityScanSchema = 
 z.object({
   items: z.array(securityScan),
@@ -34,7 +39,13 @@ z.object({
   items: z.array(review),
 });
 
+export const reviewCheckerSchema = 
+z.object({
+  items: z.array(reviewChecker),
+});
+
 export type ModelJobsOutput = z.infer<typeof job>;
 export type ModelReviewsOutput = z.infer<typeof review>;
 export type ModelSecurityScanOutput = z.infer<typeof securityScan>;
+export type ModelReviewCheckerOutput = z.infer<typeof reviewChecker>;
   
