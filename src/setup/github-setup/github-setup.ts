@@ -49,7 +49,7 @@ async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
       ${formatted}
       \`\`\``;
       const body = 
-        review.suggestion + '\n\n' + review.type + '\n\n' + 
+        review.suggestion + '\n\n' + `**${review.type}**` + '\n\n' + 
         "Here's a suggested fix:" + '\n\n' + codeBlock;
 
       if (review.diffId === hunk.id && review.suggestion != '') {
