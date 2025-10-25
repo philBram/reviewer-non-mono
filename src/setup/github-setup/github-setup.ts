@@ -20,28 +20,35 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
       continue;
     }
 
-    await octokit.request('POST /repos/{owner}/{repo}/pulls/{pull_number}/comments', {
-      owner: owner,
-      repo: repo,
-      pull_number: prNumber,
-      body: comment.body,
-      commit_id: process.env.PR_HEAD_SHA || '',
-      path: comment.path,
-      start_line: comment.startLine,
-      start_side: 'RIGHT',
-      line: comment.endLine,
-      side: 'RIGHT',
-      headers: {
-        'X-GitHub-Api-Version': '2022-11-28'
-      }
-    })
+    if (comment.diffType === 'ADDED') {
+      await octokit.request('POST /repos/{owner}/{repo}/issues/{issue_number}/comments', {
+        owner,
+        repo,
+        issue_number: prNumber,
+        body: comment.body,
+      });
+    } else {
+      await octokit.request('POST /repos/{owner}/{repo}/pulls/{pull_number}/comments', {
+        owner: owner,
+        repo: repo,
+        pull_number: prNumber,
+        body: comment.body,
+        commit_id: process.env.PR_HEAD_SHA || '',
+        path: comment.path,
+        start_line: comment.startLine,
+        start_side: 'RIGHT',
+        line: comment.endLine,
+        side: 'RIGHT',
+        headers: {
+          'X-GitHub-Api-Version': '2022-11-28'
+        }
+      });
+    }
   }
 }
 
 async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
   const diffHunks = await getAllDiffHunks();
-
-  logger.info({diffHunks});
 
   const githubComments = diffHunks.flatMap(hunk => {
     const matchingReviews = reviews.map(review => {
@@ -57,6 +64,7 @@ async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
       if (review.diffId === hunk.id && review.suggestion !== '') {
         return {
           body: body,
+          diffType: hunk.diffType,
           commitId: hunk.commitId,
           path: hunk.source,
           startLine: hunk.startLine,

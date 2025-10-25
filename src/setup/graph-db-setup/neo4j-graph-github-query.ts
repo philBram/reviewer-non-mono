@@ -7,6 +7,7 @@ export async function getAllDiffHunks() {
     MATCH (d:DIFF_HUNK)
     RETURN 
       d.id AS id,
+      d.diffType AS diffType,
       d.source AS source,
       d.startLine AS startLine,
       d.endLine AS endLine,
@@ -19,6 +20,7 @@ export async function getAllDiffHunks() {
 
   return results.map(row => ({
     id: row.id,
+    diffType: row.diffType,
     source: row.source,
     startLine: row.startLine,
     endLine: row.endLine,
