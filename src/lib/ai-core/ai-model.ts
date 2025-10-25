@@ -13,10 +13,18 @@ export enum AiProvider {
   Azure = 'azure',
 };
 
+export enum ReasoningOptions {
+  minimal = 'minimal',
+  low = 'low',
+  medium = 'medium',
+  high = 'high',
+}
+
 export interface CreateModelOptions {
   provider: AiProvider;
   model?: string;
   temperature?: number;
+  reasoning?: ReasoningOptions;
 }
 
 export interface ToolReadyChatModel extends BaseChatModel {
@@ -31,15 +39,20 @@ const FACTORIES: Record<AiProvider, Factory> = {
       model: model ?? 'gemini-2.5-flash',
       temperature: temperature ?? 0.7,
     }),
-  [AiProvider.Anthropic]: ({ model, temperature }) =>
-    new ChatAnthropic({
+  [AiProvider.Anthropic]: ({ model, temperature, reasoning }) => {
+    const budget_tokens = reasoning === 'high' ? 4000 : reasoning === 'medium' ? 3000 : 2000;
+
+    return new ChatAnthropic({
       model: model ?? 'claude-sonnet-4-5',
       temperature: temperature ?? 0.7,
-    }),
-  [AiProvider.OpenAi]: ({ model, temperature }) =>
+      thinking: { "type": reasoning ? "enabled" : "disabled", "budget_tokens": budget_tokens },
+    });
+  },
+  [AiProvider.OpenAi]: ({ model, temperature, reasoning }) =>
     new ChatOpenAI({
-      model: model ?? 'gpt-5-mini',
+      model: model ?? 'gpt-4o-mini',
       temperature: temperature ?? 0.7,
+      reasoning: { 'effort': reasoning ?? 'minimal' },
     }),
   [AiProvider.Mistral]: ({ model, temperature }) =>
     new ChatMistralAI({
@@ -56,13 +69,14 @@ const FACTORIES: Record<AiProvider, Factory> = {
         baseURL: 'https://openrouter.ai/api/v1'
       },
     }),
-  [AiProvider.Azure]: ({ model, temperature }) => {
+  [AiProvider.Azure]: ({ model, temperature, reasoning }) => {
     const azureModel = model ?? 'gpt-4o-mini';
 
     return new AzureChatOpenAI({
       model: azureModel,
       temperature: temperature ?? 0.7,
       azureOpenAIApiDeploymentName: azureModel,
+      reasoning: { 'effort': reasoning ?? 'minimal' },
     });
   },
 };

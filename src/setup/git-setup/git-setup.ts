@@ -18,11 +18,6 @@ async function getSimpleGitClient() {
   return simpleGit(process.env.REPO_PATH || '');
 }
 
-export async function checkOutBranch(branchName: string) {
-  const git = await getSimpleGitClient();
-  await git.checkout(branchName);
-}
-
 export async function getChangedFiles() {
   const git = await getSimpleGitClient();
   const prHeadSha = process.env.PR_HEAD_SHA || '';

@@ -4,7 +4,7 @@ import { ReviewAgent } from '../review-agent/review-agent';
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import { HumanMessage } from '@langchain/core/messages';
 import { WeaviateVectorDbSetup } from '../../setup/vector-db-setup/weaviate-vector-db-setup';
-import { checkOutBranch, getChangedFiles, getGitDiffHunks } from '../../setup/git-setup/git-setup';
+import { getChangedFiles, getGitDiffHunks } from '../../setup/git-setup/git-setup';
 import { DiffDetails } from '../../setup/git-setup/git-setup';
 import { getCodingGuidelines, getTaskDetails } from '../../setup/clickup-setup/clickup-setup';
 import { Neo4jGraphWithAst } from '../../setup/graph-db-setup/neo4j-graph-with-ast-setup';
@@ -24,7 +24,6 @@ export interface CreateOrchestratorModelsOptions {
 }
 
 interface SetupContext {
-  currentBranch: string;
   taskDetails: {
     customId: string;
     name: string;
@@ -185,11 +184,10 @@ export class OrchestratorAgent {
       const changedFilesIndex = state.changedFilesIndex;
       const changedFile = state.changedFiles[changedFilesIndex];
 
-      let securityFindings: ModelSecurityScanOutput[] = [];
+      let securityFindings = '';
       if (state.modelSecurityScanOutput.length > 0) {
-        securityFindings = state.modelSecurityScanOutput.filter(
-          output => output.involvedFile === changedFile
-        );
+        securityFindings = state.modelSecurityScanOutput
+          .find(output => output.involvedFile === changedFile)?.results || '';
       }
 
       const response = await agent.invoke({
@@ -283,14 +281,14 @@ export class OrchestratorAgent {
           const reviewHumanMessage = new HumanMessage(
             `## Review Job\n${JSON.stringify(job, null, 2)}\n\n` +
             `## Setup Context\n` +
-            `${JSON.stringify(state.setupContext, null, 2)}\n\n`
+            `${JSON.stringify(state.setupContext, null, 2)}\n\n` +
+            `## Review Check Feedback\n`
           );
 
           let reviewResult = await reviewAgent.invoke({
             messages: [
               reviewHumanMessage,
               new HumanMessage(
-                `## Review Check Feedback\n` +
                 `No feedback yet.`
               )
             ],
@@ -319,7 +317,6 @@ export class OrchestratorAgent {
               messages: [
                 reviewHumanMessage,
                 new HumanMessage(
-                  `## Review Check Feedback\n` +
                   `${JSON.stringify(checkerOutput, null, 2)}\n`
                 ),
               ],
