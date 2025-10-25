@@ -15,7 +15,21 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
     auth: process.env.GITHUB_TOKEN
   })
 
-  console.log(preparedComments, 'commit_id: ', process.env.PR_HEAD_SHA);
+  const prFiles = await octokit.paginate('GET /repos/{owner}/{repo}/pulls/{pull_number}/files', {
+    owner,
+    repo,
+    pull_number: prNumber,
+    per_page: 100,
+  });
+
+  const patchByPath = new Map<string, string>();
+  for (const file of prFiles) {
+    if (file.filename && file.patch) {
+      patchByPath.set(file.filename, file.patch);
+    }
+  }
+
+  const headCommitSha = process.env.PR_HEAD_SHA || '';
 
   for (const comment of preparedComments) {
     if (!comment) {
@@ -24,31 +38,64 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
 
     logger.info(`Posting comment to PR #${prNumber} in ${owner}/${repo} on ${comment.path}:${comment.startLine}-${comment.endLine}`);
 
-    if (comment.diffType === 'ADDED') {
-      await octokit.request('POST /repos/{owner}/{repo}/issues/{issue_number}/comments', {
-        owner,
-        repo,
-        issue_number: prNumber,
-        body: comment.body,
-      });
-    } else {
-      await octokit.request('POST /repos/{owner}/{repo}/pulls/{pull_number}/comments', {
-        owner: owner,
-        repo: repo,
-        pull_number: prNumber,
-        body: comment.body,
-        commit_id: process.env.PR_HEAD_SHA || '',
-        path: comment.path,
-        start_line: 250,//comment.startLine,
-        start_side: 'RIGHT',
-        line: 260,//comment.endLine,
-        side: 'RIGHT',
-        headers: {
-          'X-GitHub-Api-Version': '2022-11-28'
-        }
-      });
+    const patch = patchByPath.get(comment.path);
+
+    if (!patch) {
+      logger.warn({ path: comment.path }, 'No patch available for file; skipping comment.');
+      continue;
+    }
+
+    const targetLine = comment.endLine ?? comment.startLine;
+    const position = targetLine ? computeDiffPosition(patch, targetLine) : null;
+
+    if (!position) {
+      logger.warn({ path: comment.path, targetLine }, 'Could not resolve diff position for comment; skipping.');
+      continue;
+    }
+
+    await octokit.request('POST /repos/{owner}/{repo}/pulls/{pull_number}/comments', {
+      owner,
+      repo,
+      pull_number: prNumber,
+      body: comment.body,
+      commit_id: comment.commitId || headCommitSha,
+      path: comment.path,
+      position,
+      headers: {
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    });
+  }
+}
+
+function computeDiffPosition(patch: string, targetLine: number): number | null {
+  const lines = patch.split('\n');
+  let position = 0;
+  let currentNewLine = 0;
+
+  for (const line of lines) {
+    position += 1;
+
+    if (line.startsWith('@@')) {
+      const match = /\+([0-9]+)(?:,([0-9]+))?/.exec(line);
+      if (match) {
+        currentNewLine = parseInt(match[1], 10) - 1;
+      }
+      continue;
+    }
+
+    const indicator = line.charAt(0);
+
+    if (indicator === ' ' || indicator === '+') {
+      currentNewLine += 1;
+
+      if (currentNewLine === targetLine) {
+        return position;
+      }
     }
   }
+
+  return null;
 }
 
 async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
