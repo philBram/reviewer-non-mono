@@ -1,4 +1,4 @@
-import simpleGit, { SimpleGit } from 'simple-git';
+import simpleGit from 'simple-git';
 import { getIgnoreRegex } from '../../lib/ai-utils';
 
 export interface DiffDetails {
@@ -9,10 +9,8 @@ export interface DiffDetails {
 interface DiffHunks {
   startLine: number;
   endLine: number;
-  oldStart: number;
   diffType: string;
   content: string[];
-  commitId?: string;
 }
 
 async function getSimpleGitClient() {
@@ -26,7 +24,7 @@ export async function checkOutBranch(branchName: string) {
 
 export async function getChangedFiles(baseBranch: string) {
   const git = await getSimpleGitClient();
-  const raw = await git.diff(['--name-only', '--diff-filter=AM', `origin/${baseBranch}...${process.env.REPO_BRANCH}`]);
+  const raw = await git.diff(['--name-only', '--diff-filter=AM', `${baseBranch}...${process.env.REPO_BRANCH}`]);
   const files = raw.trim().split('\n').filter(Boolean);
   const filteredFiles = files.filter(file => !getIgnoreRegex().test(file));
 
@@ -43,7 +41,7 @@ export async function getGitDiffHunks(filePath: string, baseBranch: string) {
 
   const git = await getSimpleGitClient();
   const diff = await git.diff([
-    `origin/${baseBranch}...${process.env.REPO_BRANCH}`,
+    `${baseBranch}...${process.env.REPO_BRANCH}`,
     '--no-color',
     '--',
     filePath,
@@ -58,12 +56,11 @@ export async function getGitDiffHunks(filePath: string, baseBranch: string) {
     
     if (hunkHeader) {
       if (currentHunk) {
-        await diffHunkHelper(currentHunk, git, filePath, diffHunks);
+        await diffHunkHelper(currentHunk, diffHunks);
       }
       currentHunk = {
         startLine: parseInt(hunkHeader[3], 10),
         endLine: parseInt(hunkHeader[3], 10) + parseInt(hunkHeader[4] || '1', 10) - 1,
-        oldStart: parseInt(hunkHeader[1], 10),
         diffType: '',
         content: [],
       };
@@ -76,7 +73,7 @@ export async function getGitDiffHunks(filePath: string, baseBranch: string) {
   }
 
   if (currentHunk) {
-    await diffHunkHelper(currentHunk, git, filePath, diffHunks);
+    await diffHunkHelper(currentHunk, diffHunks);
   }
 
   const diffDetails: DiffDetails = {
@@ -87,28 +84,14 @@ export async function getGitDiffHunks(filePath: string, baseBranch: string) {
   return diffDetails;
 };
 
-async function diffHunkHelper(currentHunk: DiffHunks, git: SimpleGit, filePath: string, diffHunks: DiffHunks[]) {
-  const oldStart = currentHunk.oldStart;
+async function diffHunkHelper(currentHunk: DiffHunks, diffHunks: DiffHunks[]) {
   const startLine = currentHunk.startLine;
   const endLine = currentHunk.endLine;
-  let commitId: string | undefined;
-
-  if (oldStart > 0) {
-    currentHunk.diffType = 'MODIFIED';
-    const commit = await git.log([`-L ${startLine},${endLine}:${filePath}`]);
-    commitId = commit?.latest?.hash;
-  } else {
-    currentHunk.diffType = 'ADDED';
-    const commit = await git.log(['--follow', '--', filePath]);
-    commitId = commit?.latest?.hash;
-  }
 
   diffHunks.push({
     startLine: startLine,
     endLine: endLine,
-    oldStart,
     diffType: currentHunk.diffType,
     content: currentHunk.content,
-    commitId: commitId,
   });
 }

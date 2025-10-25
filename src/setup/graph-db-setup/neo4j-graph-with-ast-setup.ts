@@ -117,7 +117,6 @@ export class Neo4jGraphWithAst {
               content: diffContent,
               addedLines: addedLines,
               removedLines: removedLines,
-              commitId: hunk.commitId,
               startLine: hunk.startLine,
               endLine: hunk.endLine,
               source: relativeRepoPath,

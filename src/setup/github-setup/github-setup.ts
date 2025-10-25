@@ -20,6 +20,8 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
       continue;
     }
 
+    logger.info(`Posting comment to PR #${prNumber} in ${owner}/${repo} on ${comment.path}:${comment.startLine}-${comment.endLine}`);
+
     if (comment.diffType === 'ADDED') {
       await octokit.request('POST /repos/{owner}/{repo}/issues/{issue_number}/comments', {
         owner,
