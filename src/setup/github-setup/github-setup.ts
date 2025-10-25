@@ -20,6 +20,8 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
       continue;
     }
 
+    logger.debug(comment.path);
+
     await octokit.request('POST /repos/{owner}/{repo}/pulls/{pull_number}/comments', {
       owner: owner,
       repo: repo,
