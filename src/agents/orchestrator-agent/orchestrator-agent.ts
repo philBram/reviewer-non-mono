@@ -95,19 +95,16 @@ export class OrchestratorAgent {
     });
 
     const callSetup = async (_state: typeof agentAnnotation.State) => {
-      const branch = process.env.PR_BRANCH || '';
-      //await checkOutBranch(branch);
-
       const changedFiles = await getChangedFiles();
-      const taskDetails = await getTaskDetails(branch);
+      const taskDetails = await getTaskDetails();
       const relevantTaskDetails = {
         customId: taskDetails.custom_id,
         name: taskDetails.name,
         textContent: taskDetails.text_content,
       };
       const codingGuidelines = await getCodingGuidelines();
-
       const gitDiffHunks: DiffDetails[] = [];
+
       for (const filePath of changedFiles) {
         const fileDiffHunks = await getGitDiffHunks(filePath);
         gitDiffHunks.push(fileDiffHunks);

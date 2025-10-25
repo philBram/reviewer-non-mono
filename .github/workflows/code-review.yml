@@ -4,6 +4,10 @@ on:
   repository_dispatch:
     types: [review-pr]
 
+concurrency:
+  group: code-review-${{ github.event.client_payload.repo }}-${{ github.event.client_payload.pr_number }}
+  cancel-in-progress: true
+
 jobs:
   review:
     runs-on: ubuntu-latest
