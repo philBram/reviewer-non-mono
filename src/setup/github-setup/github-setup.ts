@@ -31,6 +31,11 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
 
   const headCommitSha = process.env.PR_HEAD_SHA || '';
 
+  if (!headCommitSha) {
+    logger.warn('PR_HEAD_SHA is not set; cannot post inline review comments.');
+    return;
+  }
+
   for (const comment of preparedComments) {
     if (!comment) {
       continue;
@@ -58,7 +63,7 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
       repo,
       pull_number: prNumber,
       body: comment.body,
-      commit_id: comment.commitId || headCommitSha,
+      commit_id: headCommitSha,
       path: comment.path,
       position,
       headers: {
