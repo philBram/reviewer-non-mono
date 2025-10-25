@@ -37,9 +37,9 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
         body: comment.body,
         commit_id: process.env.PR_HEAD_SHA || '',
         path: comment.path,
-        start_line: comment.startLine,
+        start_line: 250,//comment.startLine,
         start_side: 'RIGHT',
-        line: comment.endLine,
+        line: 300,//comment.endLine,
         side: 'RIGHT',
         headers: {
           'X-GitHub-Api-Version': '2022-11-28'
