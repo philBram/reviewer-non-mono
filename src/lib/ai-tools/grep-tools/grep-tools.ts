@@ -1,7 +1,9 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import * as path from 'path';
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
+import { getIgnoreRegex } from '../../ai-utils';
 
 const execFileAsync = promisify(execFile);
 
@@ -10,7 +12,8 @@ export interface GrepMatch {
   context: string[];
 }
 
-export async function grepSearch(pattern: string, contextLines: number, useRegex: boolean = true) {
+export async function grepSearch(pattern: string, contextLines: number, useRegex: boolean = true, filePath?: string) {
+  const DEFAULT_IGNORE_REGEX = getIgnoreRegex();
   const repoPath = process.env.REPO_PATH || '';
 
   const grepArgs = [
@@ -29,7 +32,8 @@ export async function grepSearch(pattern: string, contextLines: number, useRegex
     grepArgs.push('-E');
   }
 
-  grepArgs.push('--', pattern, repoPath);
+  const searchPath = filePath ? path.join(repoPath, filePath) : repoPath;
+  grepArgs.push('--', pattern, searchPath);
 
   const { stdout } = await execFileAsync('grep', grepArgs, { maxBuffer: 10 * 1024 * 1024 });
 
@@ -74,12 +78,15 @@ export async function grepSearch(pattern: string, contextLines: number, useRegex
     results.push(currentResult);
   }
 
-  return results;
+  const filtered = results.filter(result => !DEFAULT_IGNORE_REGEX.test(result.file));
+
+  return filtered;
 }
 
 export function searchCode() {
   const schema = z.object({
     pattern: z.string().describe('Search pattern (supports regex and plain text)'),
+    filePath: z.string().optional().describe('File path to limit the search to a specific file'),
     contextLines: z.number().default(10).describe('Number of context lines around each match (default 10)'),
     useRegex: z.boolean().default(true).describe('Treat pattern as extended regex (default true)'),
     maxResults: z.number().default(10).describe('Maximum number of file results to return (default 10)'),
@@ -87,10 +94,10 @@ export function searchCode() {
 
   return tool(
     async (input) => {
-      const { pattern, contextLines, useRegex, maxResults } = schema.parse(input);
-      
+      const { pattern, contextLines, useRegex, maxResults, filePath } = schema.parse(input);
+
       try {
-        const matches = await grepSearch(pattern, contextLines, useRegex);
+        const matches = await grepSearch(pattern, contextLines, useRegex, filePath);
         
         if (matches.length === 0) {
           return JSON.stringify({ found: false, matches: [], message: 'No matches found.' }, null, 2);

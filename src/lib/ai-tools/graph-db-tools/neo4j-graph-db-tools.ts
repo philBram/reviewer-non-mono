@@ -95,8 +95,7 @@ export class Neo4jGraphDbTools {
         
         const cypherQuery = `
           MATCH (decl)-[:HAS_DIFF]->(diff:DIFF_HUNK {id: $diffId})
-          OPTIONAL MATCH (decl)-[r1:EXTENDS|IMPLEMENTS]->(inherited)
-          OPTIONAL MATCH (decl)-[r2:CONTAINS]->(member)
+          OPTIONAL MATCH (decl)-[r:EXTENDS|IMPLEMENTS]->(inherited)
           WITH decl, 
                CASE 
                  WHEN collect(DISTINCT inherited) = [] THEN "no extends or implements"
@@ -104,24 +103,14 @@ export class Neo4jGraphDbTools {
                    name: inherited.name,
                    type: labels(inherited)[0],
                    source: inherited.source,
-                   relationship: type(r1)
+                   relationship: type(r)
                  })
-               END as extendsOrImplements,
-               CASE 
-                 WHEN collect(DISTINCT member) = [] THEN "no contained members"
-                 ELSE collect(DISTINCT {
-                   name: member.name, 
-                   type: labels(member)[0],
-                   source: member.source,
-                   relationship: type(r2)
-                 })
-               END as containsMembers
+               END as extendsOrImplements
           RETURN collect({
             type: labels(decl)[0],
             name: decl.name,
             source: decl.source,
-            extendsOrImplements: extendsOrImplements,
-            containsMembers: containsMembers
+            extendsOrImplements: extendsOrImplements
           }) as declarations
         `;
         
@@ -131,7 +120,6 @@ export class Neo4jGraphDbTools {
         if (result.length === 0) {
           return JSON.stringify({
             error: `No diff found with ID: ${diffId}`,
-            suggestion: 'Use find_changes to get valid diff IDs'
           }, null, 2);
         }
 
@@ -142,7 +130,7 @@ export class Neo4jGraphDbTools {
       },
       {
         name: 'find_affected_declarations',
-        description: 'Get the context of declarations (classes/methods/functions) affected by a diff. Shows declaration details, inheritance relationships (EXTENDS/IMPLEMENTS), and contained members (CONTAINS). Use the diff ID from find_changes.',
+        description: 'Get the context of declarations (classes/methods/functions) affected by a diff. Shows declaration details and inheritance relationships (EXTENDS/IMPLEMENTS).',
         schema: schema,
       }
     );
@@ -151,7 +139,7 @@ export class Neo4jGraphDbTools {
   findImpactedDeclarations() {
     const schema = z.object({
       diffId: z.string().describe('The unique ID of the diff hunk'),
-      hops: z.number().min(1).max(5).default(1).describe('Number of relationship hops to follow (1 = direct dependents, 2 = indirect dependents 1 level away, etc.)'),
+      hops: z.number().min(1).max(3).default(1).describe('Number of relationship hops to follow (1 = direct dependents, 2 = indirect dependents 1 level away, etc.)'),
     });
 
     return tool(
@@ -160,7 +148,7 @@ export class Neo4jGraphDbTools {
         
         const cypherQuery = `
           MATCH (decl)-[:HAS_DIFF]->(diff:DIFF_HUNK {id: $diffId})
-          OPTIONAL MATCH path = (dependent)-[:CALLS|EXTENDS|IMPLEMENTS*1..${hops}]->(decl)
+          OPTIONAL MATCH path = (decl)<-[:CALLS|EXTENDS|IMPLEMENTS*1..${hops}]-(dependent)
           WITH decl,
                CASE 
                  WHEN collect(DISTINCT dependent) = [] THEN "no impacted declarations"

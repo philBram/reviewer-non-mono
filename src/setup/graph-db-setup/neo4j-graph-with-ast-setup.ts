@@ -5,19 +5,15 @@ import { Document } from '@langchain/core/documents';
 import { Project, SyntaxKind, ClassDeclaration, InterfaceDeclaration, FunctionDeclaration, MethodDeclaration, Statement, Node as TsMorphNode } from 'ts-morph';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { createEmbeddingModel, CreateEmbeddingModelOptions } from '../../lib/ai-core';
-import { Embeddings } from '@langchain/core/embeddings';
 import { DiffDetails } from '../git-setup/git-setup';
-import { Neo4jClient, logger } from '../../lib/ai-utils';
+import { Neo4jClient, getIgnoreRegex, logger } from '../../lib/ai-utils';
 
-export class AstGraphDbSetup {
-  private readonly ignoreRegex = /node_modules|\/dist\/|\/build\/|\.spec\.ts$|\.d\.ts$|jest.*\.ts$|\.ya?ml$|\.json$|\.md$/;
-  private readonly embeddingModel: Embeddings;
+export class Neo4jGraphWithAst {
+  private readonly ignoreRegex = getIgnoreRegex();
   private readonly project: Project;
   private readonly entityUuidMap = new Map<string, string>();
 
-  constructor(createEmbeddingOpts: CreateEmbeddingModelOptions) {
-    this.embeddingModel = createEmbeddingModel(createEmbeddingOpts);
+  constructor() {
     this.project = new Project({
       skipAddingFilesFromTsConfig: true,
       compilerOptions: {
@@ -117,7 +113,7 @@ export class AstGraphDbSetup {
             id: diffUuid,
             type: 'DIFF_HUNK',
             properties: {
-              type: hunk.diffType,
+              diffType: hunk.diffType,
               content: diffContent,
               addedLines: addedLines,
               removedLines: removedLines,
@@ -184,6 +180,19 @@ export class AstGraphDbSetup {
           const relativeSourcePath = path.relative(process.env.REPO_PATH || '', baseClass.getSourceFile().getFilePath());
           const baseClassUuid = this.getOrCreateUuid(baseClassName, relativeSourcePath) || '';
 
+          //if (!nodes.find(node => (node as Node).id === baseClassUuid)) {
+            nodes.push(
+              new Node({
+                id: baseClassUuid,
+                type: 'CLASS',
+                properties: {
+                  name: baseClassName,
+                  source: relativeSourcePath,
+                }
+              })
+            );
+          //}
+
           relationships.push(
             new Relationship({
               source: new Node({
@@ -204,6 +213,19 @@ export class AstGraphDbSetup {
         const interfaceName = impl.getText();
         const relativeSourcePath = path.relative(process.env.REPO_PATH || '', impl.getSourceFile().getFilePath());
         const interfaceUuid = this.getOrCreateUuid(interfaceName, relativeSourcePath);
+
+        //if (!nodes.find(node => (node as Node).id === interfaceUuid)) {
+          nodes.push(
+            new Node({
+              id: interfaceUuid,
+              type: 'INTERFACE',
+              properties: {
+                name: interfaceName,
+                source: relativeSourcePath,
+              }
+            })
+          );
+        //}
 
         relationships.push(
           new Relationship({
@@ -253,6 +275,19 @@ export class AstGraphDbSetup {
             const relativeSourcePath = path.relative(process.env.REPO_PATH || '', baseDecl.getSourceFile().getFilePath());
             const baseInterfaceUuid = this.getOrCreateUuid(baseInterfaceName, relativeSourcePath);
 
+            //if (!nodes.find(node => (node as Node).id === baseInterfaceUuid)) {
+              nodes.push(
+                new Node({
+                  id: baseInterfaceUuid,
+                  type: 'INTERFACE',
+                  properties: {
+                    name: baseInterfaceName,
+                    source: relativeSourcePath,
+                  }
+                })
+              );
+            //}
+
             relationships.push(
               new Relationship({
                 source: new Node({ 
@@ -295,7 +330,8 @@ export class AstGraphDbSetup {
       );
 
       await this.addDiffHunkNode(diffDetails, func, functionUuid, relativeRepoPath, nodes, relationships);
-      await this.extractCallsFromFunction(func, functionUuid, nodes, relationships);
+      await this.extractMethodCalls(func, functionUuid, nodes, relationships);
+      await this.extractFunctionCalls(func, functionUuid, nodes, relationships);
     }
 
     this.project.removeSourceFile(sourceFile);
@@ -337,8 +373,6 @@ export class AstGraphDbSetup {
         })
       );
 
-      await this.addDiffHunkNode(diffDetails, method, methodUuid, relativeSourcePath, nodes, relationships);
-
       relationships.push(
         new Relationship({
           source: new Node({ 
@@ -353,51 +387,113 @@ export class AstGraphDbSetup {
         })
       );
 
-      if (method.getBody()) {
-        await this.extractCallsFromFunction(method, methodUuid, nodes, relationships);
+      await this.addDiffHunkNode(diffDetails, method, methodUuid, relativeSourcePath, nodes, relationships);
+      await this.extractMethodCalls(method, methodUuid, nodes, relationships);
+      await this.extractFunctionCalls(method, methodUuid, nodes, relationships);
+    }
+  }
+
+  private async extractMethodCalls(decl: MethodDeclaration | FunctionDeclaration, declUuid: string, nodes: Node[], relationships: Relationship[]) {
+    const references = decl.findReferencesAsNodes();
+    const declInfo = await this.getDeclarationName(decl);
+
+    for (const reference of references) {
+      const callingMethods = reference.getFirstAncestorByKind(SyntaxKind.MethodDeclaration);
+
+      if (callingMethods) {
+        const methodName = callingMethods.getName();
+        const callingDeclInfo = await this.getDeclarationName(callingMethods);
+
+        if (!methodName) {
+          continue;
+        }
+
+        const paramTypes = callingMethods.getParameters()
+          .map(param => param.getType().getText());
+        const relativeSourcePath = path.relative(process.env.REPO_PATH || '', callingMethods.getSourceFile().getFilePath());
+        const callerUuid = this.getOrCreateUuid(methodName + paramTypes, relativeSourcePath);
+
+        nodes.push(
+          new Node({
+            id: callerUuid,
+            type: callingDeclInfo.type,
+            properties: {
+              name: methodName,
+              source: relativeSourcePath,
+            }
+          })
+        );
+
+        if (callerUuid === declUuid) {
+          continue;
+        }
+
+        relationships.push(
+          new Relationship({
+            source: new Node({ 
+              id: callerUuid, 
+              type: callingDeclInfo.type, 
+            }),
+            target: new Node({ 
+              id: declUuid, 
+              type: declInfo.type, 
+            }),
+            type: 'CALLS',
+          })
+        );
       }
     }
   }
 
-  private async extractCallsFromFunction(
-    decl: FunctionDeclaration | MethodDeclaration,
-    callerUuid: string,
-    nodes: Node[],
-    relationships: Relationship[],
-  ) {
-    const callExpressions = decl.getDescendantsOfKind(SyntaxKind.CallExpression);
+  private async extractFunctionCalls(decl: MethodDeclaration | FunctionDeclaration, declUuid: string, nodes: Node[], relationships: Relationship[]) {
+    const references = decl.findReferencesAsNodes();
+    const declInfo = await this.getDeclarationName(decl);
 
-    for (const callExpr of callExpressions) {
-      const expression = callExpr.getExpression();
-      const callText = expression.getText();
-      const relativeSourcePath = path.relative(process.env.REPO_PATH || '', callExpr.getSourceFile().getFilePath());
-      const targetUuid = this.getOrCreateUuid(callText, relativeSourcePath);
-      const declInfo = await this.getDeclarationName(decl);
+    for (const reference of references) {
+      const callingFunction = reference.getFirstAncestorByKind(SyntaxKind.FunctionDeclaration);
 
-      nodes.push(
-        new Node({
-          id: targetUuid,
-          type: 'FUNCTION',
-          properties: {
-            name: callText,
-            source: relativeSourcePath,
-          }
-        })
-      );
+      if (callingFunction) {
+        const methodName = callingFunction.getName();
+        const callingDeclInfo = await this.getDeclarationName(callingFunction);
 
-      relationships.push(
-        new Relationship({
-          source: new Node({ 
-            id: callerUuid, 
-            type: declInfo.type,
-          }),
-          target: new Node({ 
-            id: targetUuid, 
-            type: 'FUNCTION', 
-          }),
-          type: 'CALLS',
-        })
-      );
+        if (!methodName) {
+          continue;
+        }
+
+        const paramTypes = callingFunction.getParameters()
+          .map(param => param.getType().getText());
+        const relativeSourcePath = path.relative(process.env.REPO_PATH || '', callingFunction.getSourceFile().getFilePath());
+        const callerUuid = this.getOrCreateUuid(methodName + paramTypes, relativeSourcePath);
+
+        nodes.push(
+          new Node({
+            id: callerUuid,
+            type: callingDeclInfo.type,
+            properties: {
+              name: methodName,
+              source: relativeSourcePath,
+            }
+          })
+        );
+
+        if (callerUuid === declUuid) {
+          continue;
+        }
+
+        relationships.push(
+          new Relationship({
+            source: new Node({ 
+              id: callerUuid, 
+              type: callingDeclInfo.type, 
+            }),
+            target: new Node({ 
+              id: declUuid, 
+              type: declInfo.type, 
+            }),
+            type: 'CALLS',
+          })
+        );
+      }
     }
   }
 

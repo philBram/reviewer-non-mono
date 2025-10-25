@@ -7,7 +7,7 @@ import { WeaviateVectorDbSetup } from '../../setup/vector-db-setup/weaviate-vect
 import { checkOutBranch, getChangedFiles, getGitDiffHunks } from '../../setup/git-setup/git-setup';
 import { DiffDetails } from '../../setup/git-setup/git-setup';
 import { getCodingGuidelines, getTaskDetails } from '../../setup/clickup-setup/clickup-setup';
-import { AstGraphDbSetup } from '../../setup/graph-db-setup/neo4j-graph-with-ast-setup';
+import { Neo4jGraphWithAst } from '../../setup/graph-db-setup/neo4j-graph-with-ast-setup';
 import { ModelJobsOutput, ModelReviewCheckerOutput, ModelReviewsOutput, ModelSecurityScanOutput } from '../../lib/ai-utils';
 import { SecurityScannerAgent } from '../security-scanner-agent/security-scanner-agent';
 import { ReviewCheckerAgent } from '../review-checker-agent/review-checker-agent';
@@ -42,7 +42,7 @@ export class OrchestratorAgent {
   private readonly runInParallel: boolean;
   private readonly additionalSecurityScan: boolean;
   private readonly recursionLimit: number;
-  private readonly graphDbSetup: AstGraphDbSetup;
+  private readonly graphDbSetup: Neo4jGraphWithAst;
   private readonly vectorDbSetup: WeaviateVectorDbSetup;
 
   constructor(opts: CreateOrchestratorModelsOptions) {
@@ -55,7 +55,7 @@ export class OrchestratorAgent {
     this.additionalSecurityScan = opts.additionalSecurityScan ?? false;
     this.recursionLimit = opts.recursionLimit ?? 25;
 
-    this.graphDbSetup = new AstGraphDbSetup(opts.embeddingOpts);
+    this.graphDbSetup = new Neo4jGraphWithAst();
     this.vectorDbSetup = new WeaviateVectorDbSetup(opts.embeddingOpts);
   }
 
