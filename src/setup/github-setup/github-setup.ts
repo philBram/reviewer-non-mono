@@ -25,7 +25,7 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
       repo: repo,
       pull_number: prNumber,
       body: comment.body,
-      commit_id: comment.commitId,
+      commit_id: process.env.PR_HEAD_SHA || '',
       path: comment.path,
       start_line: comment.startLine,
       start_side: 'RIGHT',
