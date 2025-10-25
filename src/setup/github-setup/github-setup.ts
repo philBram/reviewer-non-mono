@@ -6,156 +6,161 @@ import { Octokit } from 'octokit';
 export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[]) {
   const repoName = process.env.REPO_NAME || '';
   const prNumber = parseInt(process.env.PR_NUMBER || '0', 10) || 0;
-
   const [owner, repo] = repoName.split('/');
   
-  const preparedComments = await prepareGitHubComments(reviews);
-
   const octokit = new Octokit({
     auth: process.env.GITHUB_TOKEN
-  })
-
-  const prFiles = await octokit.paginate('GET /repos/{owner}/{repo}/pulls/{pull_number}/files', {
+  });
+  
+  const { data: pr } = await octokit.rest.pulls.get({
     owner,
     repo,
     pull_number: prNumber,
-    per_page: 100,
   });
-
-  const patchByPath = new Map<string, string>();
-  for (const file of prFiles) {
-    if (file.filename && file.patch) {
-      patchByPath.set(file.filename, file.patch);
-    }
-  }
-
-  const headCommitSha = process.env.PR_HEAD_SHA || '';
-
-  if (!headCommitSha) {
-    logger.warn('PR_HEAD_SHA is not set; cannot post inline review comments.');
+  
+  const currentHeadSha = pr.head.sha;
+  logger.info(`Using current PR head SHA: ${currentHeadSha}`);
+  
+  const preparedComments = await prepareGitHubComments(reviews);
+  
+  if (preparedComments.length === 0) {
+    logger.info('No comments to post');
     return;
   }
-
-  for (const comment of preparedComments) {
-    if (!comment) {
-      continue;
+  
+  logger.info(`Preparing to post ${preparedComments.length} comments`);
+  
+  // Format comments with proper single/multi-line handling
+  const reviewComments = preparedComments.map((comment: any) => {
+    const reviewComment: any = {
+      path: comment.path,
+      body: comment.body,
+      side: 'RIGHT',
+    };
+    
+    // Critical: GitHub requires different parameters for single vs multi-line
+    if (comment.startLine === comment.endLine) {
+      // Single-line comment - ONLY use 'line'
+      reviewComment.line = comment.endLine;
+    } else {
+      // Multi-line comment - use both 'start_line' and 'line'
+      reviewComment.start_line = comment.startLine;
+      reviewComment.start_side = 'RIGHT';
+      reviewComment.line = comment.endLine;
     }
-
-    logger.info(`Posting comment to PR #${prNumber} in ${owner}/${repo} on ${comment.path}:${comment.startLine}-${comment.endLine}`);
-
-    const normalizedPath = comment.path.replace(/^\.\//, '');
-    let patch = patchByPath.get(normalizedPath);
-
-    if (!patch) {
-      const fallbackKey = Array.from(patchByPath.keys()).find(key => key.endsWith(normalizedPath));
-      if (fallbackKey) {
-        patch = patchByPath.get(fallbackKey);
-        logger.debug({ path: comment.path, fallbackKey }, 'Resolved comment path via fallback key');
-      }
-    }
-
-    if (!patch) {
-      logger.warn({ path: comment.path, availablePaths: Array.from(patchByPath.keys()) }, 'No patch available for file; skipping comment.');
-      continue;
-    }
-
-  const targetLine = comment.startLine ?? comment.endLine;
-    const position = targetLine ? computeDiffPosition(patch, targetLine) : null;
-
-    if (!position) {
-      logger.warn({ path: comment.path, targetLine }, 'Could not resolve diff position for comment; skipping.');
-      continue;
-    }
-
-    await octokit.request('POST /repos/{owner}/{repo}/pulls/{pull_number}/comments', {
+    
+    return reviewComment;
+  });
+  
+  try {
+    const review = await octokit.rest.pulls.createReview({
       owner,
       repo,
       pull_number: prNumber,
-      body: comment.body,
-      commit_id: headCommitSha,
-      path: comment.path,
-      position,
-      headers: {
-        'X-GitHub-Api-Version': '2022-11-28'
-      }
+      commit_id: currentHeadSha,
+      event: 'COMMENT',
+      comments: reviewComments,
     });
-  }
-}
-
-function computeDiffPosition(patch: string, targetLine: number): number | null {
-  const lines = patch.split('\n');
-  let position = 0;
-  let currentNewLine = 0;
-
-  for (const line of lines) {
-    position += 1;
-
-    if (line.startsWith('@@')) {
-      const match = /\+([0-9]+)(?:,([0-9]+))?/.exec(line);
-      if (match) {
-        currentNewLine = parseInt(match[1], 10) - 1;
-      }
-      continue;
+    
+    logger.info(`Successfully created review with ${reviewComments.length} comments`);
+    logger.info(`Review ID: ${review.data.id}`);
+  } catch (error: any) {
+    logger.error('Failed to create review:', error.message);
+    
+    if (error.response?.data) {
+      logger.error({ error: error.response.data }, 'GitHub API response:');
     }
-
-    const indicator = line.charAt(0);
-
-    if (indicator === ' ' || indicator === '+') {
-      currentNewLine += 1;
-
-      if (currentNewLine === targetLine) {
-        return position;
+    
+    // Try posting comments individually as fallback
+    logger.info('Falling back to individual comments...');
+    
+    for (const comment of preparedComments) {
+      try {
+        const params: any = {
+          owner,
+          repo,
+          pull_number: prNumber,
+          body: comment.body,
+          commit_id: currentHeadSha,
+          path: comment.path,
+          side: 'RIGHT',
+        };
+        
+        if (comment.startLine === comment.endLine) {
+          params.line = comment.endLine;
+        } else {
+          params.start_line = comment.startLine;
+          params.start_side = 'RIGHT';
+          params.line = comment.endLine;
+        }
+        
+        await octokit.rest.pulls.createReviewComment(params);
+        logger.info(`✓ Posted comment on ${comment.path}:${comment.startLine}-${comment.endLine}`);
+      } catch (commentError: any) {
+        logger.error(`✗ Failed to post comment on ${comment.path}:${comment.startLine}-${comment.endLine}`, commentError.message);
+        
+        // Last resort: post as general PR comment
+        try {
+          await octokit.rest.issues.createComment({
+            owner,
+            repo,
+            issue_number: prNumber,
+            body: `**Comment on \`${comment.path}\` (lines ${comment.startLine}-${comment.endLine}):**\n\n${comment.body}`,
+          });
+          logger.info(`Posted as general comment instead`);
+        } catch (issueError) {
+          logger.error({ issueError }, `Failed to post as general comment:`);
+        }
       }
     }
   }
-
-  return null;
 }
 
 async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
   const diffHunks = await getAllDiffHunks();
-
+  
   const githubComments = diffHunks.flatMap(hunk => {
-    const matchingReviews = reviews.map(review => {
-      const formatted = formatCode(review.codeSuggestion);
-      const codeBlock = 
-      `\`\`\`typescript
-      ${formatted}
-      \`\`\``;
-      const body = 
-        review.suggestion + '\n\n' + `**${review.type}**` + '\n\n' + 
-        "Here's a suggested fix:" + '\n\n' + codeBlock;
-
-      if (review.diffId === hunk.id && review.suggestion !== '') {
+    // Filter FIRST, then map - more efficient
+    const matchingReviews = reviews
+      .filter(review => review.diffId === hunk.id && review.suggestion !== '')
+      .map(review => {
+        const formatted = formatCode(review.codeSuggestion);
+        const codeBlock = `\`\`\`typescript\n${formatted}\n\`\`\``;
+        const body = `${review.suggestion}\n\n**${review.type}**\n\nHere's a suggested fix:\n\n${codeBlock}`;
+        
         return {
-          body: body,
+          body,
           diffType: hunk.diffType,
           commitId: hunk.commitId,
           path: hunk.source,
           startLine: hunk.startLine,
           endLine: hunk.endLine,
         };
-      }
-
-      return null;
-    }).filter(Boolean);
-
+      });
+    
     return matchingReviews;
   });
-
+  
+  logger.info(`Prepared ${githubComments.length} GitHub comments from ${diffHunks.length} diff hunks`);
+  
   return githubComments;
 }
 
 export function formatCode(code: string) {
-  const project = new Project({
-    useInMemoryFileSystem: true,
-    manipulationSettings: { indentationText: IndentationText.TwoSpaces },
-  });
-
-  const sf = project.createSourceFile('tmp.ts', code, { overwrite: true });
-  sf.formatText();
-  const formatted = sf.getFullText();
-  project.removeSourceFile(sf);
-
-  return formatted;
+  try {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+      manipulationSettings: { indentationText: IndentationText.TwoSpaces },
+    });
+    
+    const sf = project.createSourceFile('tmp.ts', code, { overwrite: true });
+    sf.formatText();
+    const formatted = sf.getFullText();
+    project.removeSourceFile(sf);
+    
+    return formatted;
+  } catch (error) {
+    logger.error({ error }, 'Failed to format code:');
+    return code; // Return unformatted code on error
+  }
 }
