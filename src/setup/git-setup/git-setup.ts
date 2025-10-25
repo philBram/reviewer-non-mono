@@ -45,7 +45,6 @@ export async function getGitDiffHunks(filePath: string, baseBranch: string) {
   const diff = await git.diff([
     `${baseBranch}...HEAD`,
     '--no-color',
-    '--unified=0',
     '--',
     filePath,
   ]);
