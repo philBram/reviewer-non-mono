@@ -28,10 +28,9 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
   });
 
   const reviewCommentCount = pr.review_comments;
-  const currentHeadSha = pr.head.sha;
 
-  if (currentHeadSha !== PR_HEAD_SHA || reviewCommentCount > 0) {
-    logger.info(`Skipping: SHA mismatch (${currentHeadSha} vs ${PR_HEAD_SHA}) or comments exist (${reviewCommentCount} review comments)`);
+  if (reviewCommentCount > 0) {
+    logger.info(`Skipping: Comments exist (${reviewCommentCount} review comments)`);
     return;
   }
   
@@ -64,7 +63,7 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
       owner,
       repo,
       pull_number: prNumber,
-      commit_id: currentHeadSha,
+      commit_id: PR_HEAD_SHA,
       event: 'COMMENT',
       comments: reviewComments,
     });
