@@ -26,7 +26,7 @@ export async function checkOutBranch(branchName: string) {
 
 export async function getChangedFiles(baseBranch: string) {
   const git = await getSimpleGitClient();
-  const raw = await git.diff(['--name-only', '--diff-filter=AM', `${baseBranch}...HEAD`]);
+  const raw = await git.diff(['--name-only', '--diff-filter=AM', `origin/${baseBranch}...${process.env.REPO_BRANCH}`]);
   const files = raw.trim().split('\n').filter(Boolean);
   const filteredFiles = files.filter(file => !getIgnoreRegex().test(file));
 
@@ -43,11 +43,12 @@ export async function getGitDiffHunks(filePath: string, baseBranch: string) {
 
   const git = await getSimpleGitClient();
   const diff = await git.diff([
-    `${baseBranch}...HEAD`,
+    `origin/${baseBranch}...${process.env.REPO_BRANCH}`,
     '--no-color',
     '--',
     filePath,
   ]);
+
 
   const diffHunks: DiffHunks[] = [];
   let currentHunk: DiffHunks | null = null;
