@@ -43,14 +43,23 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
 
     logger.info(`Posting comment to PR #${prNumber} in ${owner}/${repo} on ${comment.path}:${comment.startLine}-${comment.endLine}`);
 
-    const patch = patchByPath.get(comment.path);
+    const normalizedPath = comment.path.replace(/^\.\//, '');
+    let patch = patchByPath.get(normalizedPath);
 
     if (!patch) {
-      logger.warn({ path: comment.path }, 'No patch available for file; skipping comment.');
+      const fallbackKey = Array.from(patchByPath.keys()).find(key => key.endsWith(normalizedPath));
+      if (fallbackKey) {
+        patch = patchByPath.get(fallbackKey);
+        logger.debug({ path: comment.path, fallbackKey }, 'Resolved comment path via fallback key');
+      }
+    }
+
+    if (!patch) {
+      logger.warn({ path: comment.path, availablePaths: Array.from(patchByPath.keys()) }, 'No patch available for file; skipping comment.');
       continue;
     }
 
-    const targetLine = comment.endLine ?? comment.startLine;
+  const targetLine = comment.startLine ?? comment.endLine;
     const position = targetLine ? computeDiffPosition(patch, targetLine) : null;
 
     if (!position) {
