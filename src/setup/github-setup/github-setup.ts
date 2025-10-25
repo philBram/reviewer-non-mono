@@ -27,10 +27,11 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
     pull_number: prNumber,
   });
 
+  const currentHeadSha = pr.head.sha;
   const reviewCommentCount = pr.review_comments;
 
-  if (reviewCommentCount > 0) {
-    logger.info(`Skipping: Comments exist (${reviewCommentCount} review comments)`);
+  if (currentHeadSha === PR_HEAD_SHA && reviewCommentCount > 0) {
+    logger.info(`Skipping: current head SHA does not match PR head SHA or there are comments ${reviewCommentCount} review comments`);
     return;
   }
   

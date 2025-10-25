@@ -23,16 +23,18 @@ export async function checkOutBranch(branchName: string) {
   await git.checkout(branchName);
 }
 
-export async function getChangedFiles(baseBranch: string) {
+export async function getChangedFiles() {
   const git = await getSimpleGitClient();
-  const raw = await git.diff(['--name-only', '--diff-filter=AM', `${baseBranch}...HEAD`]);
+  const prHeadSha = process.env.PR_HEAD_SHA || '';
+  const baseBranch = process.env.PR_BASE_BRANCH || '';
+  const raw = await git.diff(['--name-only', '--diff-filter=AM', `${baseBranch}...${prHeadSha}`]);
   const files = raw.trim().split('\n').filter(Boolean);
   const filteredFiles = files.filter(file => !getIgnoreRegex().test(file));
 
   return filteredFiles;
 }
 
-export async function getGitDiffHunks(filePath: string, baseBranch: string) {
+export async function getGitDiffHunks(filePath: string) {
   if (getIgnoreRegex().test(filePath)) {
     return {
       filePath,
@@ -41,8 +43,10 @@ export async function getGitDiffHunks(filePath: string, baseBranch: string) {
   }
 
   const git = await getSimpleGitClient();
+  const prHeadSha = process.env.PR_HEAD_SHA || '';
+  const baseBranch = process.env.PR_BASE_BRANCH || '';
   const diff = await git.diff([
-    `${baseBranch}...HEAD`,
+    `${baseBranch}...${prHeadSha}`,
     '--no-color',
     '--unified=0',
     '--',
