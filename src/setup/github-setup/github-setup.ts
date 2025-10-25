@@ -39,7 +39,7 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
         path: comment.path,
         start_line: 250,//comment.startLine,
         start_side: 'RIGHT',
-        line: 300,//comment.endLine,
+        line: 260,//comment.endLine,
         side: 'RIGHT',
         headers: {
           'X-GitHub-Api-Version': '2022-11-28'
