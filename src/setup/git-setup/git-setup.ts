@@ -12,7 +12,6 @@ interface DiffHunks {
   oldStart: number;
   diffType: string;
   content: string[];
-  commitId?: string;
 }
 
 async function getSimpleGitClient() {
@@ -91,16 +90,11 @@ async function diffHunkHelper(currentHunk: DiffHunks, git: SimpleGit, filePath: 
   const oldStart = currentHunk.oldStart;
   const startLine = currentHunk.startLine;
   const endLine = currentHunk.endLine;
-  let commitId: string | undefined;
 
   if (oldStart > 0) {
     currentHunk.diffType = 'MODIFIED';
-    const commit = await git.log([`-L ${startLine},${endLine}:${filePath}`]);
-    commitId = commit?.latest?.hash;
   } else {
     currentHunk.diffType = 'ADDED';
-    const commit = await git.log(['--follow', '--', filePath]);
-    commitId = commit?.latest?.hash;
   }
 
   diffHunks.push({
@@ -109,6 +103,5 @@ async function diffHunkHelper(currentHunk: DiffHunks, git: SimpleGit, filePath: 
     oldStart,
     diffType: currentHunk.diffType,
     content: currentHunk.content,
-    commitId: commitId,
   });
 }
