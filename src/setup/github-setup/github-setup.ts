@@ -15,6 +15,8 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
     auth: process.env.GITHUB_TOKEN
   })
 
+  console.log(preparedComments, 'commit_id: ', process.env.PR_HEAD_SHA);
+
   for (const comment of preparedComments) {
     if (!comment) {
       continue;
