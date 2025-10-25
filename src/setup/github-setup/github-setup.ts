@@ -20,8 +20,6 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
       continue;
     }
 
-    logger.debug(comment.path);
-
     await octokit.request('POST /repos/{owner}/{repo}/pulls/{pull_number}/comments', {
       owner: owner,
       repo: repo,
@@ -42,6 +40,8 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
 
 async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
   const diffHunks = await getAllDiffHunks();
+
+  logger.debug({diffHunks});
 
   const githubComments = diffHunks.flatMap(hunk => {
     const matchingReviews = reviews.map(review => {
