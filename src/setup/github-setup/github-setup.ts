@@ -41,7 +41,7 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
 async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
   const diffHunks = await getAllDiffHunks();
 
-  logger.debug({diffHunks});
+  logger.info({diffHunks});
 
   const githubComments = diffHunks.flatMap(hunk => {
     const matchingReviews = reviews.map(review => {
@@ -54,7 +54,7 @@ async function prepareGitHubComments(reviews: ModelReviewsOutput[]) {
         review.suggestion + '\n\n' + `**${review.type}**` + '\n\n' + 
         "Here's a suggested fix:" + '\n\n' + codeBlock;
 
-      if (review.diffId === hunk.id && review.suggestion != '') {
+      if (review.diffId === hunk.id && review.suggestion !== '') {
         return {
           body: body,
           commitId: hunk.commitId,
