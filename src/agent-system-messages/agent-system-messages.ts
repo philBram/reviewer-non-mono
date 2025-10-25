@@ -115,7 +115,7 @@ TOOLS:
 OUTPUT: JSON object
 {
   "diffId": "<copy from input>",
-  "suggestion": "Actionable feedback (≤300 chars), or empty string if acceptable",
+  "suggestion": "Actionable feedback (≤500 chars), or empty string if acceptable",
   "codeSuggestion": "Code fix example (≤10 lines), or empty string if no change needed",
   "type": "blocker|comment"
 }

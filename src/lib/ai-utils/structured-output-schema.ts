@@ -14,7 +14,7 @@ const job = z.object({
 
 const review = z.object({
   diffId: z.string().describe('The unique ID of the diff hunk'),
-  suggestion: z.string().describe('Actionable feedback (prefer <= 300 characters)'),
+  suggestion: z.string().describe('Actionable feedback (prefer <= 500 characters)'),
   codeSuggestion: z.string().describe('Short code suggestion that illustrates a possible fix (prefer <= 10 lines).'),
   type: z.enum(['blocker', 'comment']).describe('Severity/type of the feedback.'),
 });
