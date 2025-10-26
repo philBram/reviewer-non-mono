@@ -12,6 +12,10 @@ export class Neo4jGraphWithAst {
   private readonly ignoreRegex = getIgnoreRegex();
   private readonly project: Project;
   private readonly entityUuidMap = new Map<string, string>();
+  private readonly processedNodeIds = new Set<string>();
+  private readonly processedRelationshipKeys = new Set<string>();
+  private readonly nodes: Node[] = [];
+  private readonly relationships: Relationship[] = [];
 
   constructor() {
     this.project = new Project({
@@ -34,6 +38,39 @@ export class Neo4jGraphWithAst {
     }
 
     return this.entityUuidMap.get(key)!;
+  }
+
+  private getRelationshipKey(sourceId: string, targetId: string, type: string) {
+    return `${sourceId}:${type}:${targetId}`;
+  }
+
+  private addNodeIfNew(node: Node) {
+    const nodeId = String(node.id);
+
+    if (this.processedNodeIds.has(nodeId)) {
+      return;
+    }
+
+    this.processedNodeIds.add(nodeId);
+    this.nodes.push(node);
+  }
+
+  private addRelationshipIfNew(relationship: Relationship) {
+    const relationshipSourceId = String(relationship.source.id);
+    const relationshipTargetId = String(relationship.target.id);
+
+    const key = this.getRelationshipKey(
+      relationshipSourceId,
+      relationshipTargetId,
+      relationship.type
+    );
+    
+    if (this.processedRelationshipKeys.has(key)) {
+      return;
+    }
+
+    this.processedRelationshipKeys.add(key);
+    this.relationships.push(relationship);
   }
 
   private async getDeclarationName(decl: Statement | MethodDeclaration) {
@@ -79,14 +116,14 @@ export class Neo4jGraphWithAst {
     return filteredDocuments;
   }
 
-  private async addDiffHunkNode(diffDetails: DiffDetails[], decl: Statement | MethodDeclaration, declUuid: string, relativeRepoPath: string, nodes: Node[], relationships: Relationship[]) {
-    const diffHunksForFile = diffDetails.filter(diff => diff.filePath === relativeRepoPath);
-    
-    if (diffHunksForFile.length === 0) {
+  private async addDiffHunkNode(diffDetails: DiffDetails[], decl: Statement | MethodDeclaration, declUuid: string, relativeRepoPath: string) {
+    const diffHunksForFile = diffDetails.find(diff => diff.filePath === relativeRepoPath);
+
+    if (!diffHunksForFile) {
       return;
     }
 
-    const diffHunks = diffHunksForFile[0].hunks;
+    const diffHunks = diffHunksForFile.hunks;
     const declStartLine = decl.getStartLineNumber();
     const declEndLine = decl.getEndLineNumber();
 
@@ -104,17 +141,15 @@ export class Neo4jGraphWithAst {
           .filter(line => line.startsWith('_'))
           .map(line => line.slice(1));
 
-        const diffContent = hunk.content.join('\n');
         const diffUuid = this.getOrCreateUuid('' + hunk.startLine + hunk.endLine, relativeRepoPath);
         const declInfo = await this.getDeclarationName(decl);
 
-        nodes.push(
+        this.addNodeIfNew(
           new Node({
             id: diffUuid,
             type: 'DIFF_HUNK',
             properties: {
               diffType: hunk.diffType,
-              content: diffContent,
               addedLines: addedLines,
               removedLines: removedLines,
               startLine: hunk.startLine,
@@ -124,7 +159,7 @@ export class Neo4jGraphWithAst {
           })
         );
 
-        relationships.push(
+        this.addRelationshipIfNew(
           new Relationship({
             source: new Node({
               id: declUuid,
@@ -145,9 +180,6 @@ export class Neo4jGraphWithAst {
     const sourceFile = this.project.createSourceFile(filePath, content, { overwrite: true });
     const relativeRepoPath = path.relative(process.env.REPO_PATH || '', filePath);
 
-    const nodes: Node[] = [];
-    const relationships: Relationship[] = [];
-
     for (const cls of sourceFile.getClasses()) {
       const className = cls.getName();
 
@@ -157,7 +189,7 @@ export class Neo4jGraphWithAst {
 
       const classUuid = this.getOrCreateUuid(className, relativeRepoPath);
 
-      nodes.push(
+      this.addNodeIfNew(
         new Node({
           id: classUuid,
           type: 'CLASS',
@@ -168,7 +200,7 @@ export class Neo4jGraphWithAst {
         })
       );
 
-      await this.addDiffHunkNode(diffDetails, cls, classUuid, relativeRepoPath, nodes, relationships);
+      await this.addDiffHunkNode(diffDetails, cls, classUuid, relativeRepoPath);
 
       const baseClass = cls.getBaseClass();
 
@@ -179,20 +211,18 @@ export class Neo4jGraphWithAst {
           const relativeSourcePath = path.relative(process.env.REPO_PATH || '', baseClass.getSourceFile().getFilePath());
           const baseClassUuid = this.getOrCreateUuid(baseClassName, relativeSourcePath) || '';
 
-          //if (!nodes.find(node => (node as Node).id === baseClassUuid)) {
-            nodes.push(
-              new Node({
-                id: baseClassUuid,
-                type: 'CLASS',
-                properties: {
-                  name: baseClassName,
-                  source: relativeSourcePath,
-                }
-              })
-            );
-          //}
+          this.addNodeIfNew(
+            new Node({
+              id: baseClassUuid,
+              type: 'CLASS',
+              properties: {
+                name: baseClassName,
+                source: relativeSourcePath,
+              }
+            })
+          );
 
-          relationships.push(
+          this.addRelationshipIfNew(
             new Relationship({
               source: new Node({
                 id: classUuid,
@@ -213,20 +243,18 @@ export class Neo4jGraphWithAst {
         const relativeSourcePath = path.relative(process.env.REPO_PATH || '', impl.getSourceFile().getFilePath());
         const interfaceUuid = this.getOrCreateUuid(interfaceName, relativeSourcePath);
 
-        //if (!nodes.find(node => (node as Node).id === interfaceUuid)) {
-          nodes.push(
-            new Node({
-              id: interfaceUuid,
-              type: 'INTERFACE',
-              properties: {
-                name: interfaceName,
-                source: relativeSourcePath,
-              }
-            })
-          );
-        //}
+        this.addNodeIfNew(
+          new Node({
+            id: interfaceUuid,
+            type: 'INTERFACE',
+            properties: {
+              name: interfaceName,
+              source: relativeSourcePath,
+            }
+          })
+        );
 
-        relationships.push(
+        this.addRelationshipIfNew(
           new Relationship({
             source: new Node({ 
               id: classUuid,
@@ -241,7 +269,7 @@ export class Neo4jGraphWithAst {
         );
       }
 
-      await this.extractMethods(diffDetails, cls, classUuid, nodes, relationships);
+      await this.extractMethods(diffDetails, cls, classUuid);
     }
 
     for (const iface of sourceFile.getInterfaces()) {
@@ -253,7 +281,7 @@ export class Neo4jGraphWithAst {
 
       const interfaceUuid = this.getOrCreateUuid(interfaceName, relativeRepoPath);
 
-      nodes.push(
+      this.addNodeIfNew(
         new Node({
           id: interfaceUuid,
           type: 'INTERFACE',
@@ -264,7 +292,7 @@ export class Neo4jGraphWithAst {
         })
       );
 
-      await this.addDiffHunkNode(diffDetails, iface, interfaceUuid, relativeRepoPath, nodes, relationships);
+      await this.addDiffHunkNode(diffDetails, iface, interfaceUuid, relativeRepoPath);
 
       for (const baseDecl of iface.getBaseDeclarations()) {
         if (baseDecl.getKind() === SyntaxKind.InterfaceDeclaration) {
@@ -274,20 +302,18 @@ export class Neo4jGraphWithAst {
             const relativeSourcePath = path.relative(process.env.REPO_PATH || '', baseDecl.getSourceFile().getFilePath());
             const baseInterfaceUuid = this.getOrCreateUuid(baseInterfaceName, relativeSourcePath);
 
-            //if (!nodes.find(node => (node as Node).id === baseInterfaceUuid)) {
-              nodes.push(
-                new Node({
-                  id: baseInterfaceUuid,
-                  type: 'INTERFACE',
-                  properties: {
-                    name: baseInterfaceName,
-                    source: relativeSourcePath,
-                  }
-                })
-              );
-            //}
+            this.addNodeIfNew(
+              new Node({
+                id: baseInterfaceUuid,
+                type: 'INTERFACE',
+                properties: {
+                  name: baseInterfaceName,
+                  source: relativeSourcePath,
+                }
+              })
+            );
 
-            relationships.push(
+            this.addRelationshipIfNew(
               new Relationship({
                 source: new Node({ 
                   id: interfaceUuid,
@@ -316,7 +342,7 @@ export class Neo4jGraphWithAst {
         .map(param => param.getType().getText());
       const functionUuid = this.getOrCreateUuid(functionName + paramTypes, relativeRepoPath);
 
-      nodes.push(
+      this.addNodeIfNew(
         new Node({ 
           id: functionUuid, 
           type: 'FUNCTION', 
@@ -328,16 +354,14 @@ export class Neo4jGraphWithAst {
         })
       );
 
-      await this.addDiffHunkNode(diffDetails, func, functionUuid, relativeRepoPath, nodes, relationships);
-      await this.extractMethodCalls(func, functionUuid, nodes, relationships);
-      await this.extractFunctionCalls(func, functionUuid, nodes, relationships);
+      await this.addDiffHunkNode(diffDetails, func, functionUuid, relativeRepoPath);
+      await this.extractMethodCalls(func, functionUuid);
+      await this.extractFunctionCalls(func, functionUuid);
     }
 
-    this.project.removeSourceFile(sourceFile);
-
     return new GraphDocument({
-      nodes,
-      relationships,
+      nodes: this.nodes,
+      relationships: this.relationships,
       source: new Document({ pageContent: content, metadata: { source: filePath } }),
     });
   }
@@ -346,8 +370,6 @@ export class Neo4jGraphWithAst {
     diffDetails: DiffDetails[],
     cls: ClassDeclaration,
     classUuid: string,
-    nodes: Node[],
-    relationships: Relationship[],
   ) {
     for (const method of cls.getMethods()) {
       const methodName = method.getName();
@@ -361,7 +383,7 @@ export class Neo4jGraphWithAst {
         .map(param => param.getType().getText());
       const methodUuid = this.getOrCreateUuid(methodName + paramTypes, relativeSourcePath);
 
-      nodes.push(
+      this.addNodeIfNew(
         new Node({
           id: methodUuid, 
           type: 'METHOD',
@@ -372,7 +394,7 @@ export class Neo4jGraphWithAst {
         })
       );
 
-      relationships.push(
+      this.addRelationshipIfNew(
         new Relationship({
           source: new Node({ 
             id: classUuid, 
@@ -386,13 +408,13 @@ export class Neo4jGraphWithAst {
         })
       );
 
-      await this.addDiffHunkNode(diffDetails, method, methodUuid, relativeSourcePath, nodes, relationships);
-      await this.extractMethodCalls(method, methodUuid, nodes, relationships);
-      await this.extractFunctionCalls(method, methodUuid, nodes, relationships);
+      await this.addDiffHunkNode(diffDetails, method, methodUuid, relativeSourcePath);
+      await this.extractMethodCalls(method, methodUuid);
+      await this.extractFunctionCalls(method, methodUuid);
     }
   }
 
-  private async extractMethodCalls(decl: MethodDeclaration | FunctionDeclaration, declUuid: string, nodes: Node[], relationships: Relationship[]) {
+  private async extractMethodCalls(decl: MethodDeclaration | FunctionDeclaration, declUuid: string) {
     const references = decl.findReferencesAsNodes();
     const declInfo = await this.getDeclarationName(decl);
 
@@ -412,7 +434,7 @@ export class Neo4jGraphWithAst {
         const relativeSourcePath = path.relative(process.env.REPO_PATH || '', callingMethods.getSourceFile().getFilePath());
         const callerUuid = this.getOrCreateUuid(methodName + paramTypes, relativeSourcePath);
 
-        nodes.push(
+        this.addNodeIfNew(
           new Node({
             id: callerUuid,
             type: callingDeclInfo.type,
@@ -427,7 +449,7 @@ export class Neo4jGraphWithAst {
           continue;
         }
 
-        relationships.push(
+        this.addRelationshipIfNew(
           new Relationship({
             source: new Node({ 
               id: callerUuid, 
@@ -444,7 +466,7 @@ export class Neo4jGraphWithAst {
     }
   }
 
-  private async extractFunctionCalls(decl: MethodDeclaration | FunctionDeclaration, declUuid: string, nodes: Node[], relationships: Relationship[]) {
+  private async extractFunctionCalls(decl: MethodDeclaration | FunctionDeclaration, declUuid: string) {
     const references = decl.findReferencesAsNodes();
     const declInfo = await this.getDeclarationName(decl);
 
@@ -464,7 +486,7 @@ export class Neo4jGraphWithAst {
         const relativeSourcePath = path.relative(process.env.REPO_PATH || '', callingFunction.getSourceFile().getFilePath());
         const callerUuid = this.getOrCreateUuid(methodName + paramTypes, relativeSourcePath);
 
-        nodes.push(
+        this.addNodeIfNew(
           new Node({
             id: callerUuid,
             type: callingDeclInfo.type,
@@ -479,7 +501,7 @@ export class Neo4jGraphWithAst {
           continue;
         }
 
-        relationships.push(
+        this.addRelationshipIfNew(
           new Relationship({
             source: new Node({ 
               id: callerUuid, 
@@ -510,6 +532,17 @@ export class Neo4jGraphWithAst {
     const documents = await this.loadDocuments();
     logger.info({ documentCount: documents.length }, 'TypeScript files found');
 
+    for (const doc of documents) {
+      const filePath = doc.metadata.source;
+      const content = doc.pageContent;
+      
+      try {
+        this.project.createSourceFile(filePath, content, { overwrite: true });
+      } catch (error) {
+        logger.error({ err: error, filePath }, 'Error loading source file into project');
+      }
+    }
+
     logger.debug('Parsing TypeScript files using ts-morph AST');
     const graphDocuments: GraphDocument[] = [];
 
@@ -534,10 +567,16 @@ export class Neo4jGraphWithAst {
     logger.info({ documentCount: graphDocuments.length }, 'Storing graph in Neo4j');
     try {
       const graph = await this.getGraph();
+
       await graph.addGraphDocuments(graphDocuments);
       logger.info({ nodes: totalNodes, relationships: totalRelationships }, 'Graph stored successfully');
     } catch (error) {
       logger.error({ err: error, nodeCount: totalNodes }, 'Error storing graph documents in Neo4j');
+    }
+
+    logger.debug('Cleaning up ts-morph project');
+    for (const sourceFile of this.project.getSourceFiles()) {
+      this.project.removeSourceFile(sourceFile);
     }
 
     logger.info({ nodes: totalNodes, relationships: totalRelationships }, 'Graph build complete');
