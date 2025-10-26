@@ -1,4 +1,4 @@
-import { AiProvider, EmbeddingProvider } from './lib/ai-core/index';
+import { AiProvider, EmbeddingProvider, ReasoningOptions } from './lib/ai-core/index';
 import { OrchestratorAgent } from './agents/orchestrator-agent/orchestrator-agent';
 import * as dotenv from 'dotenv';
 import { MCPTools } from './lib/ai-tools/index';
@@ -10,7 +10,7 @@ dotenv.config();
 export async function main() {
 	const reviewCheck = true;
 	const runInParallel = true;
-	const recursionLimit = 50;
+	const recursionLimit = 200;
 	const additionalSecurityScan = false;
 
 	const createOrchestratorModelsOptions = {
@@ -19,15 +19,18 @@ export async function main() {
 		},
 		securityScannerOpts: {
 			provider: AiProvider.Azure, 
-			temperature: 0.2
+			temperature: 0.2,
+			reasoning: ReasoningOptions.minimal,
 		},
 		plannerOpts: {
 			provider: AiProvider.Azure,
-			temperature: 0.4
+			temperature: 0.4,
+			reasoning: ReasoningOptions.medium,
 		},
 		reviewerOpts: {
 			provider: AiProvider.Azure,
-			temperature: 0.3
+			temperature: 0.3,
+			reasoning: ReasoningOptions.high,
 		},
 		reviewCheck,
 		runInParallel,
