@@ -11,9 +11,9 @@ import { Neo4jClient, getIgnoreRegex, logger } from '../../lib/ai-utils';
 export class Neo4jGraphWithAst {
   private readonly ignoreRegex = getIgnoreRegex();
   private readonly project: Project;
-  private readonly entityUuidMap = new Map<string, string>();
-  private readonly processedNodeIds = new Set<string>();
-  private readonly processedRelationshipKeys = new Set<string>();
+  private readonly declUuids = new Map<string, string>();
+  private readonly addedNodes = new Set<string>();
+  private readonly addedRelationships = new Set<string>();
   private readonly nodes: Node[] = [];
   private readonly relationships: Relationship[] = [];
 
@@ -33,43 +33,34 @@ export class Neo4jGraphWithAst {
   private getOrCreateUuid(name: string, filePath: string) {
     const key = `${name}:${filePath}`;
 
-    if (!this.entityUuidMap.has(key)) {
-      this.entityUuidMap.set(key, uuidv4());
+    if (!this.declUuids.has(key)) {
+      this.declUuids.set(key, uuidv4());
     }
 
-    return this.entityUuidMap.get(key)!;
-  }
-
-  private getRelationshipKey(sourceId: string, targetId: string, type: string) {
-    return `${sourceId}:${type}:${targetId}`;
+    return this.declUuids.get(key)!;
   }
 
   private addNodeIfNew(node: Node) {
     const nodeId = String(node.id);
 
-    if (this.processedNodeIds.has(nodeId)) {
+    if (this.addedNodes.has(nodeId)) {
       return;
     }
 
-    this.processedNodeIds.add(nodeId);
+    this.addedNodes.add(nodeId);
     this.nodes.push(node);
   }
 
   private addRelationshipIfNew(relationship: Relationship) {
     const relationshipSourceId = String(relationship.source.id);
     const relationshipTargetId = String(relationship.target.id);
+    const key = `${relationshipSourceId}:${relationshipTargetId}:${relationship.type}`;
 
-    const key = this.getRelationshipKey(
-      relationshipSourceId,
-      relationshipTargetId,
-      relationship.type
-    );
-    
-    if (this.processedRelationshipKeys.has(key)) {
+    if (this.addedRelationships.has(key)) {
       return;
     }
 
-    this.processedRelationshipKeys.add(key);
+    this.addedRelationships.add(key);
     this.relationships.push(relationship);
   }
 
@@ -91,10 +82,7 @@ export class Neo4jGraphWithAst {
     } else if (TsMorphNode.isMethodDeclaration(decl)) {
       declInfo.name = decl.getName();
       declInfo.type = 'METHOD';
-    } else {
-      declInfo.name = decl.getKindName();
-      declInfo.type = decl.getKindName();
-    }
+    } 
 
     return declInfo;
   }
@@ -207,35 +195,37 @@ export class Neo4jGraphWithAst {
       if (baseClass) {
         const baseClassName = baseClass.getName();
 
-        if (baseClassName) {
-          const relativeSourcePath = path.relative(process.env.REPO_PATH || '', baseClass.getSourceFile().getFilePath());
-          const baseClassUuid = this.getOrCreateUuid(baseClassName, relativeSourcePath) || '';
+        if (!baseClassName) {
+          continue;
+        }
 
-          this.addNodeIfNew(
-            new Node({
+        const relativeSourcePath = path.relative(process.env.REPO_PATH || '', baseClass.getSourceFile().getFilePath());
+        const baseClassUuid = this.getOrCreateUuid(baseClassName, relativeSourcePath) || '';
+
+        this.addNodeIfNew(
+          new Node({
+            id: baseClassUuid,
+            type: 'CLASS',
+            properties: {
+              name: baseClassName,
+              source: relativeSourcePath,
+            }
+          })
+        );
+
+        this.addRelationshipIfNew(
+          new Relationship({
+            source: new Node({
+              id: classUuid,
+              type: 'CLASS',
+            }),
+            target: new Node({ 
               id: baseClassUuid,
               type: 'CLASS',
-              properties: {
-                name: baseClassName,
-                source: relativeSourcePath,
-              }
-            })
-          );
-
-          this.addRelationshipIfNew(
-            new Relationship({
-              source: new Node({
-                id: classUuid,
-                type: 'CLASS',
-              }),
-              target: new Node({ 
-                id: baseClassUuid,
-                type: 'CLASS',
-              }),
-              type: 'EXTENDS',
-            })
-          );
-        }
+            }),
+            type: 'EXTENDS',
+          })
+        );
       }
 
       for (const impl of cls.getImplements()) {
@@ -518,6 +508,63 @@ export class Neo4jGraphWithAst {
     }
   }
 
+  filterGraph(hops: number) {
+    const affectedNodeIds = new Set<string>();
+
+    for (const relationship of this.relationships) {
+      const sourceId = String(relationship.source.id);
+
+      if (relationship.type === 'HAS_DIFF') {
+        affectedNodeIds.add(sourceId);
+      }
+    }
+
+    let currentLevel = Array.from(affectedNodeIds);
+    
+    for (let i = 0; i < hops; i++) {
+      const nextLevel: string[] = [];
+
+      for (const current of currentLevel) {
+        const neighbors = this.relationships
+          .filter(relationship => 
+            String(relationship.source.id) === current || 
+            String(relationship.target.id) === current);
+
+        for (const neighbor of neighbors) {
+          const neighborId = String(
+            String(neighbor.source.id) === current ? 
+            neighbor.target.id : 
+            neighbor.source.id
+          );
+
+          if (!affectedNodeIds.has(neighborId)) {
+            affectedNodeIds.add(neighborId);
+            nextLevel.push(neighborId);
+          }
+        }
+      }
+
+      if (nextLevel.length === 0) {
+        break;
+      }
+      
+      currentLevel = nextLevel;
+    }
+
+    const filteredNodes = this.nodes.filter(node => affectedNodeIds.has(String(node.id)));
+    const filteredRelationships = this.relationships.filter(relationship => 
+      (affectedNodeIds.has(String(relationship.source.id)) &&
+      affectedNodeIds.has(String(relationship.target.id))) ||
+      relationship.type === 'HAS_DIFF'
+    );
+
+    return new GraphDocument({
+      nodes: filteredNodes,
+      relationships: filteredRelationships,
+      source: new Document({ pageContent: `Filtered Graph with ${hops} hops`, metadata: {} }),
+    });
+  }
+
   async clearGraph() {
     const graph = await this.getGraph();
     await graph.query('MATCH (n) DETACH DELETE n');
@@ -525,7 +572,7 @@ export class Neo4jGraphWithAst {
     logger.info('Graph cleared successfully');
   }
 
-  async buildGraph(diffDetails: DiffDetails[]) {
+  async buildGraph(diffDetails: DiffDetails[], hops: number = 3) {
     logger.info('Starting Neo4j graph database setup');
     await this.clearGraph();
     
@@ -549,7 +596,7 @@ export class Neo4jGraphWithAst {
     for (const doc of documents) {
       const filePath = doc.metadata.source;
       const content = doc.pageContent;
-      
+
       try {
         const graphDoc = await this.parseTypeScriptFile(filePath, diffDetails, content);
 
@@ -561,17 +608,15 @@ export class Neo4jGraphWithAst {
       }
     }
 
-    const totalNodes = graphDocuments.reduce((sum, doc) => sum + doc.nodes.length, 0);
-    const totalRelationships = graphDocuments.reduce((sum, doc) => sum + doc.relationships.length, 0);
+    const graphDocumentsFiltered = this.filterGraph(hops);
 
-    logger.info({ documentCount: graphDocuments.length }, 'Storing graph in Neo4j');
+    logger.info('Storing graph in Neo4j');
     try {
       const graph = await this.getGraph();
 
-      await graph.addGraphDocuments(graphDocuments);
-      logger.info({ nodes: totalNodes, relationships: totalRelationships }, 'Graph stored successfully');
+      await graph.addGraphDocuments([graphDocumentsFiltered]);
     } catch (error) {
-      logger.error({ err: error, nodeCount: totalNodes }, 'Error storing graph documents in Neo4j');
+      logger.error({ err: error }, 'Error storing graph documents in Neo4j');
     }
 
     logger.debug('Cleaning up ts-morph project');
@@ -579,6 +624,6 @@ export class Neo4jGraphWithAst {
       this.project.removeSourceFile(sourceFile);
     }
 
-    logger.info({ nodes: totalNodes, relationships: totalRelationships }, 'Graph build complete');
+    logger.info('Graph build complete');
   }
 }
