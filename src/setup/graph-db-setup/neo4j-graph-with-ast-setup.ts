@@ -2,7 +2,7 @@ import { DirectoryLoader } from 'langchain/document_loaders/fs/directory';
 import { TextLoader } from 'langchain/document_loaders/fs/text';
 import { GraphDocument, Relationship, Node } from '@langchain/community/graphs/document';
 import { Document } from '@langchain/core/documents';
-import { Project, SyntaxKind, ClassDeclaration, InterfaceDeclaration, FunctionDeclaration, MethodDeclaration, Statement, Node as TsMorphNode } from 'ts-morph';
+import { Project, SyntaxKind, ClassDeclaration, InterfaceDeclaration, FunctionDeclaration, MethodDeclaration, Statement, Node as TsMorphNode, CallExpression, SourceFile } from 'ts-morph';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { DiffDetails } from '../git-setup/git-setup';
@@ -26,7 +26,7 @@ export class Neo4jGraphWithAst {
     });
   }
 
-  private async getGraph() {
+  private async getGraphClient() {
     return await Neo4jClient.getClient();
   }
 
@@ -64,7 +64,7 @@ export class Neo4jGraphWithAst {
     this.relationships.push(relationship);
   }
 
-  private async getDeclarationName(decl: Statement | MethodDeclaration) {
+  private async getDeclarationName(decl: Statement | MethodDeclaration | CallExpression) {
     const declInfo = {
       name: '',
       type: '',
@@ -79,6 +79,9 @@ export class Neo4jGraphWithAst {
     } else if (TsMorphNode.isFunctionDeclaration(decl)) {
       declInfo.name = decl.getName() || '';
       declInfo.type = 'FUNCTION';
+    } else if (TsMorphNode.isCallExpression(decl)) {
+      declInfo.name = decl.getExpression().getText();
+      declInfo.type = 'TEST_CASE';
     } else if (TsMorphNode.isMethodDeclaration(decl)) {
       declInfo.name = decl.getName();
       declInfo.type = 'METHOD';
@@ -90,7 +93,9 @@ export class Neo4jGraphWithAst {
   private async loadDocuments() {
     const loader = new DirectoryLoader(
       process.env.REPO_PATH || '',
-      { '.ts': (path) => new TextLoader(path) },
+      { '.ts': (path) => new TextLoader(path),
+        '.js': (path) => new TextLoader(path),
+      },
       true,
       'ignore'
     );
@@ -104,48 +109,24 @@ export class Neo4jGraphWithAst {
     return filteredDocuments;
   }
 
-  private async addDiffHunkNode(diffDetails: DiffDetails[], decl: Statement | MethodDeclaration, declUuid: string, relativeRepoPath: string) {
-    const diffHunksForFile = diffDetails.find(diff => diff.filePath === relativeRepoPath);
+  private async addDiffHunkNode(decl: Statement | MethodDeclaration | CallExpression, declUuid: string, relativeRepoPath: string) {
+    const diffHunksForFile = this.nodes.filter(node => node.type === 'DIFF_HUNK' && node.properties?.source === relativeRepoPath);
 
-    if (!diffHunksForFile) {
+    if (diffHunksForFile.length === 0) {
       return;
     }
 
-    const diffHunks = diffHunksForFile.hunks;
     const declStartLine = decl.getStartLineNumber();
     const declEndLine = decl.getEndLineNumber();
 
-    for (const hunk of diffHunks) {
+    for (const hunk of diffHunksForFile) {
       const hunkOverlapsDecl = 
-        hunk.startLine <= declEndLine && hunk.endLine >= declStartLine ||
-        hunk.startLine >= declStartLine && hunk.endLine <= declEndLine;
+        hunk.properties?.startLine <= declEndLine && hunk.properties?.endLine >= declStartLine ||
+        hunk.properties?.startLine >= declStartLine && hunk.properties?.endLine <= declEndLine;
 
       if (hunkOverlapsDecl) {
-        const addedLines = hunk.content
-          .filter(line => line.startsWith('+'))
-          .map(line => line.slice(1));
-
-        const removedLines = hunk.content
-          .filter(line => line.startsWith('_'))
-          .map(line => line.slice(1));
-
-        const diffUuid = this.getOrCreateUuid('' + hunk.startLine + hunk.endLine, relativeRepoPath);
+        const diffUuid = this.getOrCreateUuid('' + hunk.properties?.startLine + hunk.properties?.endLine, relativeRepoPath);
         const declInfo = await this.getDeclarationName(decl);
-
-        this.addNodeIfNew(
-          new Node({
-            id: diffUuid,
-            type: 'DIFF_HUNK',
-            properties: {
-              diffType: hunk.diffType,
-              addedLines: addedLines,
-              removedLines: removedLines,
-              startLine: hunk.startLine,
-              endLine: hunk.endLine,
-              source: relativeRepoPath,
-            }
-          })
-        );
 
         this.addRelationshipIfNew(
           new Relationship({
@@ -164,7 +145,7 @@ export class Neo4jGraphWithAst {
     }
   }
 
-  private async parseTypeScriptFile(filePath: string, diffDetails: DiffDetails[], content: string) {
+  private async parseTypeScriptFile(filePath: string, content: string) {
     const sourceFile = this.project.createSourceFile(filePath, content, { overwrite: true });
     const relativeRepoPath = path.relative(process.env.REPO_PATH || '', filePath);
 
@@ -188,7 +169,7 @@ export class Neo4jGraphWithAst {
         })
       );
 
-      await this.addDiffHunkNode(diffDetails, cls, classUuid, relativeRepoPath);
+      await this.addDiffHunkNode(cls, classUuid, relativeRepoPath);
 
       const baseClass = cls.getBaseClass();
 
@@ -259,7 +240,7 @@ export class Neo4jGraphWithAst {
         );
       }
 
-      await this.extractMethods(diffDetails, cls, classUuid);
+      await this.extractMethods(cls, classUuid);
     }
 
     for (const iface of sourceFile.getInterfaces()) {
@@ -282,7 +263,7 @@ export class Neo4jGraphWithAst {
         })
       );
 
-      await this.addDiffHunkNode(diffDetails, iface, interfaceUuid, relativeRepoPath);
+      await this.addDiffHunkNode(iface, interfaceUuid, relativeRepoPath);
 
       for (const baseDecl of iface.getBaseDeclarations()) {
         if (baseDecl.getKind() === SyntaxKind.InterfaceDeclaration) {
@@ -344,10 +325,12 @@ export class Neo4jGraphWithAst {
         })
       );
 
-      await this.addDiffHunkNode(diffDetails, func, functionUuid, relativeRepoPath);
+      await this.addDiffHunkNode(func, functionUuid, relativeRepoPath);
       await this.extractMethodCalls(func, functionUuid);
       await this.extractFunctionCalls(func, functionUuid);
     }
+
+    await this.extractTestCases(sourceFile, relativeRepoPath);
 
     return new GraphDocument({
       nodes: this.nodes,
@@ -357,7 +340,6 @@ export class Neo4jGraphWithAst {
   }
 
   private async extractMethods(
-    diffDetails: DiffDetails[],
     cls: ClassDeclaration,
     classUuid: string,
   ) {
@@ -398,7 +380,7 @@ export class Neo4jGraphWithAst {
         })
       );
 
-      await this.addDiffHunkNode(diffDetails, method, methodUuid, relativeSourcePath);
+      await this.addDiffHunkNode(method, methodUuid, relativeSourcePath);
       await this.extractMethodCalls(method, methodUuid);
       await this.extractFunctionCalls(method, methodUuid);
     }
@@ -508,14 +490,62 @@ export class Neo4jGraphWithAst {
     }
   }
 
+  private async extractTestCases(sourceFile: SourceFile, relativeRepoPath: string) {
+    const callExpressions = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
+    
+    for (const callExpr of callExpressions) {
+      if (!this.isTestCall(callExpr)) {
+        continue;
+      }
+      
+      const testName = this.extractTestName(callExpr);
+
+      if (!testName) {
+        continue;
+      }
+      
+      const testUuid = this.getOrCreateUuid(testName, relativeRepoPath);
+      
+      this.addNodeIfNew(
+        new Node({
+          id: testUuid,
+          type: 'TEST_CASE',
+          properties: { name: testName, source: relativeRepoPath }
+        })
+      );
+      
+      await this.addDiffHunkNode(callExpr, testUuid, relativeRepoPath);
+    }
+  }
+
+  private isTestCall(callExpr: CallExpression) {
+    const text = callExpr.getExpression().getText();
+    const testPatterns = ['describe', 'test', 'it'];
+    
+    return testPatterns.some(pattern => 
+      text === pattern
+    );
+  }
+
+  private extractTestName(callExpr: CallExpression) {
+    const text = callExpr.getExpression().getText();
+    const args = callExpr.getArguments();
+
+    if (args.length === 0 || args[0].getKind() !== SyntaxKind.StringLiteral) {
+      return null;
+    }
+
+    const fullTestName = text + ':' + args[0].getText().slice(1, -1);
+
+    return fullTestName;
+  }
+
   filterGraph(hops: number) {
     const affectedNodeIds = new Set<string>();
 
     for (const relationship of this.relationships) {
-      const sourceId = String(relationship.source.id);
-
       if (relationship.type === 'HAS_DIFF') {
-        affectedNodeIds.add(sourceId);
+        affectedNodeIds.add(String(relationship.source.id));
       }
     }
 
@@ -551,11 +581,16 @@ export class Neo4jGraphWithAst {
       currentLevel = nextLevel;
     }
 
+    for (const node of this.nodes) {
+      if (node.type === 'DIFF_HUNK') {
+        affectedNodeIds.add(String(node.id));
+      }
+    }
+
     const filteredNodes = this.nodes.filter(node => affectedNodeIds.has(String(node.id)));
     const filteredRelationships = this.relationships.filter(relationship => 
       (affectedNodeIds.has(String(relationship.source.id)) &&
-      affectedNodeIds.has(String(relationship.target.id))) ||
-      relationship.type === 'HAS_DIFF'
+      affectedNodeIds.has(String(relationship.target.id)))
     );
 
     return new GraphDocument({
@@ -565,8 +600,40 @@ export class Neo4jGraphWithAst {
     });
   }
 
+  createDiffHunkNodes(diffDetails: DiffDetails[]) {
+    for (const diffFile of diffDetails) {
+      const relativeRepoPath = diffFile.filePath || '';
+      for (const hunk of diffFile.hunks) {
+        
+        const addedLines = hunk.content
+          .filter(line => line.startsWith('+'))
+          .map(line => line.slice(1));
+        const removedLines = hunk.content
+          .filter(line => line.startsWith('-'))
+          .map(line => line.slice(1));
+
+        const diffUuid = this.getOrCreateUuid('' + hunk.startLine + hunk.endLine, relativeRepoPath);
+
+        this.addNodeIfNew(
+          new Node({
+            id: diffUuid,
+            type: 'DIFF_HUNK',
+            properties: {
+              diffType: hunk.diffType,
+              addedLines: addedLines,
+              removedLines: removedLines,
+              startLine: hunk.startLine,
+              endLine: hunk.endLine,
+              source: relativeRepoPath,
+            }
+          })
+        );
+      }
+    }
+  }
+
   async clearGraph() {
-    const graph = await this.getGraph();
+    const graph = await this.getGraphClient();
     await graph.query('MATCH (n) DETACH DELETE n');
 
     logger.info('Graph cleared successfully');
@@ -574,7 +641,10 @@ export class Neo4jGraphWithAst {
 
   async buildGraph(diffDetails: DiffDetails[], hops: number = 3) {
     logger.info('Starting Neo4j graph database setup');
+
     await this.clearGraph();
+
+    this.createDiffHunkNodes(diffDetails);
     
     const documents = await this.loadDocuments();
     logger.info({ documentCount: documents.length }, 'TypeScript files found');
@@ -598,7 +668,7 @@ export class Neo4jGraphWithAst {
       const content = doc.pageContent;
 
       try {
-        const graphDoc = await this.parseTypeScriptFile(filePath, diffDetails, content);
+        const graphDoc = await this.parseTypeScriptFile(filePath, content);
 
         if (graphDoc.nodes.length > 0) {
           graphDocuments.push(graphDoc);
@@ -612,7 +682,7 @@ export class Neo4jGraphWithAst {
 
     logger.info('Storing graph in Neo4j');
     try {
-      const graph = await this.getGraph();
+      const graph = await this.getGraphClient();
 
       await graph.addGraphDocuments([graphDocumentsFiltered]);
     } catch (error) {

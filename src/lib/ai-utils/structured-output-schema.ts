@@ -9,11 +9,12 @@ const job = z.object({
   diffId: z.string().describe('The unique ID of the diff hunk'),
   reason: z.string().describe('security|guidelines|impact|mixed'),
   summary: z.string().describe('Brief explanation of why this change was flagged (<= 300 chars prefered)'),
-  impacted: z.boolean().default(false).describe('Whether planner found this hunk has impact (affects multiple declarations). If true, reviewer can skip find_impacted_declarations to save cost.'),
+  hasDependents: z.boolean().default(false).describe('Whether planner found this hunk has impact (affects multiple declarations). If true, reviewer can skip find_impacted_declarations to save cost.'),
 });
 
 const review = z.object({
   diffId: z.string().describe('The unique ID of the diff hunk'),
+  reasoning: z.string().describe('Step-by-step reasoning: 1. What changed? 2. Potential risks? 3. Why is it safe/unsafe?'),
   suggestion: z.string().describe('Actionable feedback (prefer <= 500 characters)'),
   codeSuggestion: z.string().describe('Short code suggestion that illustrates a possible fix (prefer <= 10 lines).'),
   type: z.enum(['blocker', 'comment']).describe('Severity/type of the feedback.'),

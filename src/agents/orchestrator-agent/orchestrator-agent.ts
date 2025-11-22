@@ -4,7 +4,7 @@ import { ReviewAgent } from '../review-agent/review-agent';
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import { HumanMessage } from '@langchain/core/messages';
 import { WeaviateVectorDbSetup } from '../../setup/vector-db-setup/weaviate-vector-db-setup';
-import { getChangedFiles, getGitDiffHunks } from '../../setup/git-setup/git-setup';
+import { getChangedFiles, getGitDiffHunks, gitCheckout } from '../../setup/git-setup/git-setup';
 import { DiffDetails } from '../../setup/git-setup/git-setup';
 import { getCodingGuidelines, getTaskDetails } from '../../setup/clickup-setup/clickup-setup';
 import { Neo4jGraphWithAst } from '../../setup/graph-db-setup/neo4j-graph-with-ast-setup';
@@ -18,6 +18,7 @@ export interface CreateOrchestratorModelsOptions {
   reviewerOpts: CreateModelOptions;
   securityScannerOpts: CreateModelOptions;
   reviewCheck?: boolean;
+  reviewCheckLimit?: number;
   runInParallel?: boolean;
   additionalSecurityScan?: boolean;
   recursionLimit?: number;
@@ -38,6 +39,7 @@ export class OrchestratorAgent {
   private readonly securityScannerOpts: CreateModelOptions;
   private readonly embeddingOpts: CreateEmbeddingModelOptions;
   private readonly reviewCheck: boolean;
+  private readonly reviewCheckLimit: number;
   private readonly runInParallel: boolean;
   private readonly additionalSecurityScan: boolean;
   private readonly recursionLimit: number;
@@ -50,6 +52,7 @@ export class OrchestratorAgent {
     this.securityScannerOpts = opts.securityScannerOpts;
     this.embeddingOpts = opts.embeddingOpts;
     this.reviewCheck = opts.reviewCheck ?? false;
+    this.reviewCheckLimit = opts.reviewCheckLimit ?? 5;
     this.runInParallel = opts.runInParallel ?? false;
     this.additionalSecurityScan = opts.additionalSecurityScan ?? false;
     this.recursionLimit = opts.recursionLimit ?? 25;
@@ -96,12 +99,12 @@ export class OrchestratorAgent {
     const callSetup = async (_state: typeof agentAnnotation.State) => {
       const changedFiles = await getChangedFiles();
       const taskDetails = await getTaskDetails();
-      const relevantTaskDetails = {
+      /*const relevantTaskDetails = {
         customId: taskDetails.custom_id,
         name: taskDetails.name,
         textContent: taskDetails.text_content,
       };
-      const codingGuidelines = await getCodingGuidelines();
+      const codingGuidelines = await getCodingGuidelines();*/
       const gitDiffHunks: DiffDetails[] = [];
 
       for (const filePath of changedFiles) {
@@ -109,12 +112,13 @@ export class OrchestratorAgent {
         gitDiffHunks.push(fileDiffHunks);
       }
 
+      await gitCheckout();
       await this.graphDbSetup.buildGraph(gitDiffHunks);
 
       return { 
         setupContext: {
-          taskDetails: relevantTaskDetails || '',
-          codingGuidelines: codingGuidelines?.content || '',
+          taskDetails: '', //relevantTaskDetails || '',
+          codingGuidelines: '', //codingGuidelines?.content || '',
         },
         changedFiles: changedFiles || [],
       };
@@ -298,40 +302,54 @@ export class OrchestratorAgent {
           });
 
           if (this.reviewCheck) {
-            const reviewCheckerResult = await reviewCheckerAgent.invoke({
-              messages: [
-                new HumanMessage(
-                  `${JSON.stringify(reviewResult.messages, null, 2)}`
-                )
-              ],
-            });
+            let reviewCheckCount = 0;
 
-            const checkerOutput = reviewCheckerResult.modelOutput as ModelReviewCheckerOutput[];
-            const isAcceptable = checkerOutput[0].isAcceptable;
-            
-            if (isAcceptable) {
-              return reviewResult;
+            while (reviewCheckCount < this.reviewCheckLimit) {
+              reviewCheckCount++;
+
+              const reviewCheckerResult = await reviewCheckerAgent.invoke({
+                messages: [
+                  new HumanMessage(
+                    `${JSON.stringify(reviewResult.messages, null, 2)}`
+                  )
+                ],
+              });
+
+              const checkerOutput = reviewCheckerResult.modelOutput as ModelReviewCheckerOutput[];
+              const isAcceptable = checkerOutput[0].isAcceptable;
+              
+              if (isAcceptable) {
+                return reviewResult.modelOutput;
+              }
+              else if (!isAcceptable && reviewCheckCount >= this.reviewCheckLimit) {
+                return [
+                  {
+                    'diffId': '-1', 
+                    'suggestion': '', 
+                    'codeSuggestion': '', 
+                    'type': 'comment'
+                  }
+                ] as ModelReviewsOutput[];
+              }
+
+              reviewResult = await reviewAgent.invoke({
+                messages: [
+                  reviewHumanMessage,
+                  new HumanMessage(
+                    `${JSON.stringify(checkerOutput, null, 2)}\n`
+                  ),
+                ],
+              },
+              {
+                recursionLimit: this.recursionLimit,
+              });
             }
-
-            reviewResult = await reviewAgent.invoke({
-              messages: [
-                reviewHumanMessage,
-                new HumanMessage(
-                  `${JSON.stringify(checkerOutput, null, 2)}\n`
-                ),
-              ],
-            },
-            {
-              recursionLimit: this.recursionLimit,
-            });
           }
-
-          return reviewResult;
         })
       );
 
       return {
-        modelReviewOutput: results.flatMap(result => result.modelOutput as ModelReviewsOutput[]),
+        modelReviewOutput: results.flatMap(result => result as ModelReviewsOutput[]),
       };
     };
 

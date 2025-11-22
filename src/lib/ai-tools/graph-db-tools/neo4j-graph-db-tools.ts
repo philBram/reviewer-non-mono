@@ -148,22 +148,21 @@ export class Neo4jGraphDbTools {
         
         const cypherQuery = `
           MATCH (decl)-[:HAS_DIFF]->(diff:DIFF_HUNK {id: $diffId})
-          OPTIONAL MATCH path = (decl)<-[:CALLS|EXTENDS|IMPLEMENTS*1..${hops}]-(dependent)
-          WITH decl,
-               CASE 
-                 WHEN collect(DISTINCT dependent) = [] THEN "no impacted declarations"
-                 ELSE collect(DISTINCT {
-                   name: dependent.name,
-                   type: labels(dependent)[0],
-                   source: dependent.source,
-                   hopsAway: length(path)
-                 })
-               END as impactedDeclarations
+          WITH COLLECT(decl) as changedDecls
+          UNWIND changedDecls as changedDecl
+          OPTIONAL MATCH path = (changedDecl)<-[:CALLS|EXTENDS|IMPLEMENTS*1..${hops}]-(dependent)
+          WITH changedDecl,
+               COLLECT(DISTINCT {
+                 name: dependent.name,
+                 type: labels(dependent)[0],
+                 source: dependent.source,
+                 hopsAway: length(path)
+               }) as dependents
           RETURN {
-            changedDeclaration: decl.name,
-            changedType: labels(decl)[0],
-            changedSource: decl.source,
-            impactedDeclarations: impactedDeclarations
+            changedDeclaration: changedDecl.name,
+            changedType: labels(changedDecl)[0],
+            changedSource: changedDecl.source,
+            impactedDeclarations: dependents
           } as impactAnalysis
         `;
         
@@ -173,15 +172,14 @@ export class Neo4jGraphDbTools {
         return JSON.stringify({
           diffId: diffId,
           hops: hops,
-          impactAnalysis: result.length > 0 ? result[0].impactAnalysis : null,
-          message: result.length === 0 || result[0].impactAnalysis.impactedDeclarations === 'no impacted declarations'
-            ? `No declarations found that depend on this change within ${hops} hop(s). This change may be isolated or internal.`
-            : undefined
+          impactAnalysis: result.length > 0 ? result : [],
+          message: result.length === 0 
+            ? `No declarations found with changes in this diff.` : ''
         }, null, 2);
       },
       {
         name: 'find_impacted_declarations',
-        description: 'Find what declarations depend on the declarations that were changed in a diff, up to a specified number of relationship hops away. Supports variable-length paths to find both direct dependents (1 hop) and indirect dependents through the call graph. Relationship types: CALLS, EXTENDS, IMPLEMENTS.',
+        description: 'Find all declarations affected by a diff, and what other declarations depend on those changed declarations. Returns multiple impact analyses - one for each declaration directly affected by the diff. Use this to understand the scope of changes and their dependents.',
         schema: schema,
       }
     );

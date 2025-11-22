@@ -36,7 +36,7 @@ type Factory = (opts: Omit<CreateModelOptions, 'provider'>) => BaseChatModel;
 const FACTORIES: Record<AiProvider, Factory> = {
   [AiProvider.Google]: ({ model, temperature }) =>
     new ChatGoogleGenerativeAI({
-      model: model ?? 'gemini-2.5-flash',
+      model: model ?? 'gemini-2.5-pro',
       temperature: temperature ?? 0.7,
     }),
   [AiProvider.Anthropic]: ({ model, temperature, reasoning }) => {
@@ -59,12 +59,13 @@ const FACTORIES: Record<AiProvider, Factory> = {
       model: model ?? 'mistral-large-latest',
       temperature: temperature ?? 0.7,
     }),
-  [AiProvider.OpenRouter]: ({ model, temperature }) =>
+  [AiProvider.OpenRouter]: ({ model, temperature, reasoning }) =>
     new ChatOpenAI(
     {
-      model: model ?? 'microsoft/mai-ds-r1:free',
+      model: model ?? 'nvidia/nemotron-nano-12b-v2-vl:free',
       temperature: temperature ?? 0.7,
       apiKey: process.env['OPENROUTER_API_KEY'] ?? '',
+      reasoning: { 'effort': reasoning ?? 'minimal' },
       configuration: {
         baseURL: 'https://openrouter.ai/api/v1'
       },

@@ -9,30 +9,32 @@ dotenv.config();
 
 export async function main() {
 	const reviewCheck = true;
+	const reviewCheckLimit = 5;
 	const runInParallel = true;
 	const recursionLimit = 200;
 	const additionalSecurityScan = false;
 
 	const createOrchestratorModelsOptions = {
 		embeddingOpts: {
-			provider: EmbeddingProvider.Azure,
+			provider: EmbeddingProvider.Google,
 		},
 		securityScannerOpts: {
-			provider: AiProvider.Azure, 
+			provider: AiProvider.Google,
 			temperature: 0.2,
 			reasoning: ReasoningOptions.minimal,
 		},
 		plannerOpts: {
-			provider: AiProvider.Azure,
+			provider: AiProvider.Google,
 			temperature: 0.4,
 			reasoning: ReasoningOptions.medium,
 		},
 		reviewerOpts: {
-			provider: AiProvider.Azure,
+			provider: AiProvider.Google,
 			temperature: 0.3,
 			reasoning: ReasoningOptions.high,
 		},
 		reviewCheck,
+		reviewCheckLimit,
 		runInParallel,
 		additionalSecurityScan,
 		recursionLimit,
@@ -51,14 +53,14 @@ export async function main() {
 		const reviewOutput = result.modelReviewOutput;
 		logger.info(reviewOutput);
 		
-		if (reviewOutput && reviewOutput.length > 0) {
+		/*if (reviewOutput && reviewOutput.length > 0) {
 			logger.info({ count: reviewOutput.length }, 'Processing review items for GitHub');
 			await postPullRequestReviewComments(reviewOutput);
 		} else {
 			logger.info('No review items to post.');
 		}
 
-		logger.info({ reviewCount: result.modelReviewOutput?.length || 0 }, 'Code review completed successfully');
+		logger.info({ reviewCount: result.modelReviewOutput?.length || 0 }, 'Code review completed successfully'); */
 	} catch (error) {
 		logger.error({ err: error }, 'Error invoking orchestrator agent');
 		throw error;

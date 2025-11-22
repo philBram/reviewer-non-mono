@@ -25,11 +25,14 @@ export async function grepSearch(pattern: string, contextLines: number, useRegex
     '--binary-files=without-match',
     '-s',
     '--include=*.ts',
+    '--include=*.js',
     '-C', String(contextLines),
   ];
 
   if (useRegex) {
     grepArgs.push('-E');
+  } else {
+    grepArgs.push('-F');
   }
 
   const searchPath = filePath ? path.join(repoPath, filePath) : repoPath;
@@ -47,13 +50,22 @@ export async function grepSearch(pattern: string, contextLines: number, useRegex
 
   for (const line of stdout.split('\n').filter(Boolean)) {
     const tsIndex = line.indexOf('.ts');
+    const jsIndex = line.indexOf('.js');
+    
+    let fileEndIndex = -1;
+    
+    if (tsIndex !== -1) {
+      fileEndIndex = tsIndex;
+    } else if (jsIndex !== -1) {
+      fileEndIndex = jsIndex;
+    }
 
-    if (tsIndex === -1) {
+    if (fileEndIndex === -1) {
       continue;
     }
 
-    const file = line.substring(0, tsIndex + 3);
-    const rest = line.substring(tsIndex + 4);
+    const file = line.substring(0, fileEndIndex + 3);
+    const rest = line.substring(fileEndIndex + 4);
     const contentMatch = rest.match(/^\d+[:-](.*)$/);
     const content = contentMatch ? contentMatch[1] : '';
 

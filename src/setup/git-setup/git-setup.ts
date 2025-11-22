@@ -18,6 +18,15 @@ async function getSimpleGitClient() {
   return simpleGit(process.env.REPO_PATH || '');
 }
 
+export async function gitCheckout(usePRBranch: boolean = true) {
+  const git = await getSimpleGitClient();
+  const baseBranch = process.env.PR_BASE_BRANCH || '';
+  const prHeadSha = process.env.PR_HEAD_SHA || '';
+  const checkoutRef = usePRBranch ? prHeadSha : baseBranch;
+
+  await git.checkout(checkoutRef);
+}
+
 export async function getChangedFiles() {
   const git = await getSimpleGitClient();
   const prHeadSha = process.env.PR_HEAD_SHA || '';
