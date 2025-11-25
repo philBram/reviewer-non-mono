@@ -101,13 +101,13 @@ export class OrchestratorAgent {
 
     const callSetup = async (_state: typeof agentAnnotation.State) => {
       const changedFiles = await getChangedFiles();
-      /*const taskDetails = await getTaskDetails();
+      const taskDetails = await getTaskDetails();
       const relevantTaskDetails = {
         customId: taskDetails.custom_id,
         name: taskDetails.name,
         textContent: taskDetails.text_content,
       };
-      const codingGuidelines = await getCodingGuidelines();*/
+      const codingGuidelines = await getCodingGuidelines();
       const gitDiffHunks: DiffDetails[] = [];
 
       for (const filePath of changedFiles) {
@@ -120,8 +120,8 @@ export class OrchestratorAgent {
 
       return { 
         setupContext: {
-          taskDetails: '', //relevantTaskDetails || '',
-          codingGuidelines: 'Es handelt sich um das fastify repository', //codingGuidelines?.content || '',
+          taskDetails: relevantTaskDetails || '',
+          codingGuidelines: codingGuidelines?.content || '',
         },
         changedFiles: changedFiles || [],
       };

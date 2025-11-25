@@ -28,7 +28,7 @@ export async function main() {
 		},
 		reviewerOpts: {
 			provider: AiProvider.Google,
-			temperature: 1.5,
+			temperature: 0.3,
 		},
 		reviewCheckerOpts: {
 			provider: AiProvider.Google,
@@ -54,14 +54,14 @@ export async function main() {
 		const reviewOutput = result.modelReviewOutput;
 		logger.info(reviewOutput);
 		
-		/*if (reviewOutput && reviewOutput.length > 0) {
+		if (reviewOutput && reviewOutput.length > 0) {
 			logger.info({ count: reviewOutput.length }, 'Processing review items for GitHub');
 			await postPullRequestReviewComments(reviewOutput);
 		} else {
 			logger.info('No review items to post.');
 		}
 
-		logger.info({ reviewCount: result.modelReviewOutput?.length || 0 }, 'Code review completed successfully'); */
+		logger.info({ reviewCount: result.modelReviewOutput?.length || 0 }, 'Code review completed successfully'); 
 	} catch (error) {
 		logger.error({ err: error }, 'Error invoking orchestrator agent');
 		throw error;
