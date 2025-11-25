@@ -1,6 +1,5 @@
 import { AdditionalMCPTools, BaseAgent } from '../base-agent/base-agent';
 import { CreateModelOptions } from '../../lib/ai-core';
-import { getFileContent } from '../../lib/ai-tools';
 import { securityScannerAgentSystemMessage } from '../../agent-system-messages/agent-system-messages';
 import { securityScanSchema } from '../../lib/ai-utils';
 
@@ -19,8 +18,6 @@ export class SecurityScannerAgent extends BaseAgent {
 	}
 
   private getTools() {
-		return [
-			getFileContent(),
-		];
+		return [];
   }
 } 

@@ -31,7 +31,11 @@ export async function getChangedFiles() {
   const git = await getSimpleGitClient();
   const prHeadSha = process.env.PR_HEAD_SHA || '';
   const baseBranch = process.env.PR_BASE_BRANCH || '';
-  const raw = await git.diff(['--name-only', '--diff-filter=AM', `${baseBranch}...${prHeadSha}`]);
+
+  const mergeBase = await git.raw(['merge-base', baseBranch, prHeadSha]);
+  const mergeBaseSha = mergeBase.trim();
+
+  const raw = await git.diff(['--name-only', '--diff-filter=AM', `${mergeBaseSha}...${prHeadSha}`]);
   const files = raw.trim().split('\n').filter(Boolean);
   const filteredFiles = files.filter(file => !getIgnoreRegex().test(file));
 
@@ -49,8 +53,12 @@ export async function getGitDiffHunks(filePath: string) {
   const git = await getSimpleGitClient();
   const prHeadSha = process.env.PR_HEAD_SHA || '';
   const baseBranch = process.env.PR_BASE_BRANCH || '';
+
+  const mergeBase = await git.raw(['merge-base', baseBranch, prHeadSha]);
+  const mergeBaseSha = mergeBase.trim();
+
   const diff = await git.diff([
-    `${baseBranch}...${prHeadSha}`,
+    `${mergeBaseSha}...${prHeadSha}`,
     '--no-color',
     '--',
     filePath,

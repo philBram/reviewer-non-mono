@@ -121,8 +121,8 @@ export class Neo4jGraphWithAst {
 
     for (const hunk of diffHunksForFile) {
       const hunkOverlapsDecl = 
-        hunk.properties?.startLine <= declEndLine && hunk.properties?.endLine >= declStartLine ||
-        hunk.properties?.startLine >= declStartLine && hunk.properties?.endLine <= declEndLine;
+        hunk.properties?.overLapStartLine <= declEndLine && hunk.properties?.overLapEndLine >= declStartLine ||
+        hunk.properties?.overLapStartLine >= declStartLine && hunk.properties?.overLapEndLine <= declEndLine;
 
       if (hunkOverlapsDecl) {
         const diffUuid = this.getOrCreateUuid('' + hunk.properties?.startLine + hunk.properties?.endLine, relativeRepoPath);
@@ -164,6 +164,7 @@ export class Neo4jGraphWithAst {
           type: 'CLASS',
           properties: {
             name: className,
+            content: cls.getText(),
             source: relativeRepoPath,
           }
         })
@@ -189,6 +190,7 @@ export class Neo4jGraphWithAst {
             type: 'CLASS',
             properties: {
               name: baseClassName,
+              content: baseClass.getText(),
               source: relativeSourcePath,
             }
           })
@@ -220,6 +222,7 @@ export class Neo4jGraphWithAst {
             type: 'INTERFACE',
             properties: {
               name: interfaceName,
+              content: impl.getText(),
               source: relativeSourcePath,
             }
           })
@@ -258,6 +261,7 @@ export class Neo4jGraphWithAst {
           type: 'INTERFACE',
           properties: {
             name: interfaceName,
+            content: iface.getText(),
             source: relativeRepoPath,
           }
         })
@@ -279,6 +283,7 @@ export class Neo4jGraphWithAst {
                 type: 'INTERFACE',
                 properties: {
                   name: baseInterfaceName,
+                  content: baseDecl.getText(),
                   source: relativeSourcePath,
                 }
               })
@@ -320,6 +325,7 @@ export class Neo4jGraphWithAst {
           properties: 
           {
             name: functionName,
+            content: func.getText(),
             source: relativeRepoPath,
           }
         })
@@ -361,6 +367,7 @@ export class Neo4jGraphWithAst {
           type: 'METHOD',
           properties: {
             name: methodName,
+            content: method.getText(),
             source: relativeSourcePath,
           }
         })
@@ -391,27 +398,28 @@ export class Neo4jGraphWithAst {
     const declInfo = await this.getDeclarationName(decl);
 
     for (const reference of references) {
-      const callingMethods = reference.getFirstAncestorByKind(SyntaxKind.MethodDeclaration);
+      const callingDecl = reference.getFirstAncestorByKind(SyntaxKind.MethodDeclaration);
 
-      if (callingMethods) {
-        const methodName = callingMethods.getName();
-        const callingDeclInfo = await this.getDeclarationName(callingMethods);
+      if (callingDecl) {
+        const callingDeclName = callingDecl.getName();
+        const callingDeclInfo = await this.getDeclarationName(callingDecl);
 
-        if (!methodName) {
+        if (!callingDeclName) {
           continue;
         }
 
-        const paramTypes = callingMethods.getParameters()
+        const paramTypes = callingDecl.getParameters()
           .map(param => param.getType().getText());
-        const relativeSourcePath = path.relative(process.env.REPO_PATH || '', callingMethods.getSourceFile().getFilePath());
-        const callerUuid = this.getOrCreateUuid(methodName + paramTypes, relativeSourcePath);
+        const relativeSourcePath = path.relative(process.env.REPO_PATH || '', callingDecl.getSourceFile().getFilePath());
+        const callerUuid = this.getOrCreateUuid(callingDeclName + paramTypes, relativeSourcePath);
 
         this.addNodeIfNew(
           new Node({
             id: callerUuid,
             type: callingDeclInfo.type,
             properties: {
-              name: methodName,
+              name: callingDeclName,
+              content: callingDecl.getText(),
               source: relativeSourcePath,
             }
           })
@@ -443,19 +451,19 @@ export class Neo4jGraphWithAst {
     const declInfo = await this.getDeclarationName(decl);
 
     for (const reference of references) {
-      const callingFunction = reference.getFirstAncestorByKind(SyntaxKind.FunctionDeclaration);
+      const callingDecl = reference.getFirstAncestorByKind(SyntaxKind.FunctionDeclaration);
 
-      if (callingFunction) {
-        const methodName = callingFunction.getName();
-        const callingDeclInfo = await this.getDeclarationName(callingFunction);
+      if (callingDecl) {
+        const methodName = callingDecl.getName();
+        const callingDeclInfo = await this.getDeclarationName(callingDecl);
 
         if (!methodName) {
           continue;
         }
 
-        const paramTypes = callingFunction.getParameters()
+        const paramTypes = callingDecl.getParameters()
           .map(param => param.getType().getText());
-        const relativeSourcePath = path.relative(process.env.REPO_PATH || '', callingFunction.getSourceFile().getFilePath());
+        const relativeSourcePath = path.relative(process.env.REPO_PATH || '', callingDecl.getSourceFile().getFilePath());
         const callerUuid = this.getOrCreateUuid(methodName + paramTypes, relativeSourcePath);
 
         this.addNodeIfNew(
@@ -464,6 +472,7 @@ export class Neo4jGraphWithAst {
             type: callingDeclInfo.type,
             properties: {
               name: methodName,
+              content: callingDecl.getText(),
               source: relativeSourcePath,
             }
           })
@@ -510,7 +519,11 @@ export class Neo4jGraphWithAst {
         new Node({
           id: testUuid,
           type: 'TEST_CASE',
-          properties: { name: testName, source: relativeRepoPath }
+          properties: { 
+            name: testName,
+            content: callExpr.getText(),
+            source: relativeRepoPath
+          }
         })
       );
       
@@ -612,6 +625,17 @@ export class Neo4jGraphWithAst {
           .filter(line => line.startsWith('-'))
           .map(line => line.slice(1));
 
+        const firstAddedOrRemovedIndex = hunk.content
+          .findIndex(line => line.startsWith('+') || line.startsWith('-'));
+
+        let lastAddedOrRemovedLineIndex = -1
+        for (let i = hunk.content.length - 1; i >= 0; i--) {
+          if (hunk.content[i].startsWith('+') || hunk.content[i].startsWith('-')) {
+            lastAddedOrRemovedLineIndex = i;
+            break;
+          }
+        }
+
         const diffUuid = this.getOrCreateUuid('' + hunk.startLine + hunk.endLine, relativeRepoPath);
 
         this.addNodeIfNew(
@@ -624,6 +648,8 @@ export class Neo4jGraphWithAst {
               removedLines: removedLines,
               startLine: hunk.startLine,
               endLine: hunk.endLine,
+              overLapStartLine: hunk.startLine + firstAddedOrRemovedIndex,
+              overLapEndLine: hunk.startLine + lastAddedOrRemovedLineIndex,
               source: relativeRepoPath,
             }
           })

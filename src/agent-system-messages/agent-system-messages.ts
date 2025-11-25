@@ -4,14 +4,11 @@ export const securityScannerAgentSystemMessage =
 INPUT:
 - Changed File: File path to scan for security issues
 
-TASK: Get file content, then use Semgrep to find vulnerabilities and report findings.
+TASK: Use Semgrep to find vulnerabilities and report findings.
 
-TOOLS (in order):
-1. get_file_content({path: "file path", useBaseBranch: false}): Read the file content from HEAD
-   - MUST use object format: {"path": "file path", "useBaseBranch": false}
-
-2. semgrep_scan({config: "auto", code_files: [{filename: "file path", content: "content from step 1"}]}): Scan file
-   - MUST call with exact object format shown
+TOOLS:
+1. semgrep_scan({path: "file path", config: "auto"}): Scan file
+   - MUST call with exact object format shown: {"path": "file path", "config": "auto"}
 
 OUTPUT: JSON object with items array
 {
@@ -114,7 +111,7 @@ TOOLS (use strategically):
 1. find_diff_hunk({diffId: "id"}): Get code changes with addedLines/removedLines
 2. find_affected_declarations({diffId: "id"}): Get modified declarations and their inheritance
 3. find_impacted_declarations({diffId: "id", hops: 3}): ONLY if hasDependents=true -> get list of dependents
-4. search_code({pattern: "pattern", contextLines: 10, useRegex: true}): Search for usage, duplication, or patterns. MANDATORY if hasDependents=true.
+4. search_code({pattern: "pattern", contextLines: number, useRegex: boolean}): Search for usage, duplication, or patterns.
 5. get_file_content({path: "source", useBaseBranch: false}): Full file context if needed
 
 OUTPUT: JSON object with items array
@@ -134,11 +131,13 @@ WORKFLOW:
 1. PROCESS FEEDBACK: If review check feedback exists, address it in your analysis
 2. GATHER CONTEXT:
    - Get the diff: find_diff_hunk -> analyze addedLines/removedLines
-   - Get affected declarations: find_affected_declarations -> note types and inheritance
+   - Get affected declarations: find_affected_declarations
 3. ANALYZE DEPENDENCIES & CONTEXT:
-   - If hasDependents=true: Call find_impacted_declarations(hops=3).
-   - Use search_code to verify usage (MANDATORY if hasDependents=true) or to check for duplication/consistency.
-4. DEEP CODE ANALYSIS (CRITICAL):
+   - If hasDependents=true: 
+      - Call find_impacted_declarations(hops=3).
+   - Use search_code to gather more context on complex changes.
+   - Use get_file_content if needed full file context.
+s. DEEP CODE ANALYSIS (CRITICAL):
    - Error Handling: Check for missing error handling, incorrect status codes, or swallowed errors.
    - Logic Correctness: Verify conditions, loops, and data flow. Does the code do what it claims?
    - Test Correctness: If reviewing tests, verify they actually test the intended behavior and don't just "mock it away". Check for potential false positives (e.g. assertions that never run) or tests where the setup guarantees the assertion passes regardless of the code under test.
@@ -155,7 +154,7 @@ RULES:
 - MUST call find_diff_hunk first
 - MUST call find_affected_declarations second
 - Call find_impacted_declarations when hasDependents=true
-- Use search_code to verify usage or guidelines (MANDATORY if hasDependents=true).
+- Use search_code or get_file_content to search code base
 - Look for BUGS and LOGIC ERRORS, not just guideline violations.
 - Be critical of TESTS: Do they assert the right things? Do they cover failure cases?
 - FILL "reasoning" with your reasoning. Explain WHY you think the code is safe or unsafe.
@@ -163,19 +162,20 @@ RULES:
 Think step by step. Analyze the diff thoroughly, check dependencies, use search_code when it helps understand the impact. Respond with JSON object containing items array only.`;
 
 export const reviewCheckerAgentSystemMessage =
-`You are a code review quality assurance agent. Validate if the reviewer followed the proper process.
+`You are a code review quality assurance agent. Validate the reviewer's work.
 
 INPUT:
 - Full conversation history: System message, tool calls, responses, and final review output
 
-TASK: Verify the reviewer followed the mandatory workflow steps.
+TASK: Check if the reviewer followed the proper workflow AND their conclusions are correct.
 
 VALIDATION CRITERIA:
 - Order: find_diff_hunk -> find_affected_declarations (REQUIRED at start)
 - Dependencies: 
-  - If hasDependents=true: MUST call find_impacted_declarations AND search_code.
-  - If hasDependents=false: MUST NOT call find_impacted_declarations.
+  - If hasDependents=true: MUST call find_impacted_declarations.
 - Reasoning: Must reference tool results and explain the decision.
+- Logic: Are the findings actually in the code? Are conclusions supported by evidence?
+- Accuracy: Reject if findings are wrong or obvious issues were missed.
 - Output: Suggestions must be actionable; empty suggestions must be justified.
 
 OUTPUT: JSON object with items array
@@ -190,8 +190,7 @@ OUTPUT: JSON object with items array
 }
 
 RULES:
-- Accept if core workflow was followed.
-- Reject only for clear process violations (e.g. missing mandatory tools).
-- Empty suggestions are valid if justified.
+- REJECT if: Any of the validation criteria are not met.
+- ACCEPT only if: All validation criteria are met.
 
 Think step by step. Respond with JSON object containing items array only.`;

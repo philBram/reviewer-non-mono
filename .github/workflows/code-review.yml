@@ -67,6 +67,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install Semgrep
+        run: pip install semgrep
+
       - name: Install dependencies
         working-directory: reviewer-non-mono
         run: npm install

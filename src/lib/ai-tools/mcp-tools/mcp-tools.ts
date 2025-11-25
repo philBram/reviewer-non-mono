@@ -1,4 +1,5 @@
 import { MultiServerMCPClient } from '@langchain/mcp-adapters';
+import { logger } from '../../ai-utils/logger';
 
 export class MCPTools {
   private static _mcpclient: MultiServerMCPClient;
@@ -10,10 +11,9 @@ export class MCPTools {
       this._mcpclient = this.initializeMCPClient();
     }
     const semgrepTools = await this._mcpclient.getTools();
-    semgrepTools
-      .filter(tool => tool.name.includes('semgrep_scan'));
-
-    return semgrepTools;
+    const filteredTools = semgrepTools.filter(tool => tool.name.includes('semgrep_scan'));
+    
+    return filteredTools;
   }
 
   private static initializeMCPClient() {
@@ -22,8 +22,8 @@ export class MCPTools {
       useStandardContentBlocks: true,
       mcpServers: {
         'semgrep': {
-          'transport': 'http',
-          'url': 'https://mcp.semgrep.ai/mcp',
+          'transport': 'sse',
+          'url': 'https://mcp.semgrep.ai/sse',
         },
       }
     });

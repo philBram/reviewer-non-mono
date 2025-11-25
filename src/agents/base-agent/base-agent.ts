@@ -4,7 +4,7 @@ import { ToolNode } from '@langchain/langgraph/prebuilt';
 import { createAiModel, CreateModelOptions, ToolReadyChatModel, AiProvider } from '../../lib/ai-core';
 import { RunnableLambda } from '@langchain/core/runnables';
 import { z } from 'zod';
-import { MCPTools } from '../../lib/ai-tools';
+import { MCPTools, getSemgrepScanTool } from '../../lib/ai-tools';
 import { ModelJobsOutput, ModelReviewCheckerOutput, ModelReviewsOutput, ModelSecurityScanOutput, logger } from '../../lib/ai-utils';
 
 export enum AdditionalMCPTools {
@@ -39,9 +39,9 @@ export abstract class BaseAgent {
 
   private async useAdditionalMCPTools() {
     if (this.additionalMCPTools === AdditionalMCPTools.Semgrep) {
-      const semgrepTools = await MCPTools.getSemgrepTools();
+      const semgrepTool = getSemgrepScanTool();
 
-      return [...semgrepTools, ...this.tools];
+      return [semgrepTool, ...this.tools];
     }
 
     return this.tools;
@@ -103,14 +103,15 @@ export abstract class BaseAgent {
 
       const response = await runnableWithStructuredOutput.withRetry({ stopAfterAttempt: 3 }).invoke([
         new SystemMessage(
-          'You are a JSON extraction assistant. Your ONLY job is to take the input content and convert it into the required JSON schema format.' +
+          'You are a JSON extraction assistant. Your job is to take the input content and convert it into the required JSON schema format.' +
           'CRITICAL RULES:\n' +
-          '1. Do NOT modify, add, remove, or rephrase any key-value pairs from the input\n' +
-          '2. Do NOT add explanatory text, summaries, or additional fields\n' +
-          '3. Simply extract and structure the exact data provided into the schema\n' +
-          '4. If the input is already valid JSON matching the schema, output it exactly as-is\n' +
-          '5. If any required fields are missing from the input, respond with an empty array\n' +
-          '6. Preserve all original values exactly - do not interpret, summarize, or transform them'
+          '1. Do NOT add explanatory text, summaries, or additional fields\n' +
+          '2. Simply extract and structure the data provided into the schema\n' +
+          '3. If the input is already valid JSON matching the schema, output it exactly as-is\n' +
+          '4. You MUST fix formatting issues to ensure valid JSON:\n' +
+          '   - Remove markdown code blocks (```) from string values\n' +
+          '   - Properly escape special characters (newlines, quotes, backslashes)\n' +
+          '   - Ensure the output is strictly valid JSON'
         ),
         new HumanMessage(
           'Extract the following content into the required JSON schema format. ' +

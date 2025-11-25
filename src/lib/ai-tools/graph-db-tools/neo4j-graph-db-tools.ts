@@ -102,13 +102,15 @@ export class Neo4jGraphDbTools {
                  ELSE collect(DISTINCT {
                    name: inherited.name,
                    type: labels(inherited)[0],
+                   content: decl.content,
                    source: inherited.source,
                    relationship: type(r)
                  })
                END as extendsOrImplements
           RETURN collect({
-            type: labels(decl)[0],
             name: decl.name,
+            type: labels(decl)[0],
+            content: decl.content,
             source: decl.source,
             extendsOrImplements: extendsOrImplements
           }) as declarations
@@ -155,6 +157,7 @@ export class Neo4jGraphDbTools {
                COLLECT(DISTINCT {
                  name: dependent.name,
                  type: labels(dependent)[0],
+                 content: dependent.content,
                  source: dependent.source,
                  hopsAway: length(path)
                }) as dependents
@@ -162,19 +165,19 @@ export class Neo4jGraphDbTools {
             changedDeclaration: changedDecl.name,
             changedType: labels(changedDecl)[0],
             changedSource: changedDecl.source,
-            impactedDeclarations: dependents
+            impactedDeclarations: [d IN dependents WHERE d.name IS NOT NULL]
           } as impactAnalysis
         `;
         
         const graph = await this.graphClient;
-        const result = await graph.query(cypherQuery, { diffId });
+        const results = await graph.query(cypherQuery, { diffId });
+
+        const impactAnalyses = results.map(result => result.impactAnalysis);
         
         return JSON.stringify({
           diffId: diffId,
           hops: hops,
-          impactAnalysis: result.length > 0 ? result : [],
-          message: result.length === 0 
-            ? `No declarations found with changes in this diff.` : ''
+          impactAnalysis: impactAnalyses,
         }, null, 2);
       },
       {

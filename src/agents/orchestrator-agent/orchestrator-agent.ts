@@ -14,9 +14,10 @@ import { ReviewCheckerAgent } from '../review-checker-agent/review-checker-agent
 
 export interface CreateOrchestratorModelsOptions {
   embeddingOpts: CreateEmbeddingModelOptions;
+  securityScannerOpts: CreateModelOptions;
   plannerOpts: CreateModelOptions;
   reviewerOpts: CreateModelOptions;
-  securityScannerOpts: CreateModelOptions;
+  reviewCheckerOpts: CreateModelOptions;
   reviewCheck?: boolean;
   reviewCheckLimit?: number;
   runInParallel?: boolean;
@@ -34,9 +35,10 @@ interface SetupContext {
 }
 
 export class OrchestratorAgent {
+  private readonly securityScannerOpts: CreateModelOptions;
   private readonly plannerOpts: CreateModelOptions;
   private readonly reviewerOpts: CreateModelOptions;
-  private readonly securityScannerOpts: CreateModelOptions;
+  private readonly reviewCheckerOpts: CreateModelOptions;
   private readonly embeddingOpts: CreateEmbeddingModelOptions;
   private readonly reviewCheck: boolean;
   private readonly reviewCheckLimit: number;
@@ -47,9 +49,10 @@ export class OrchestratorAgent {
   private readonly vectorDbSetup: WeaviateVectorDbSetup;
 
   constructor(opts: CreateOrchestratorModelsOptions) {
+    this.securityScannerOpts = opts.securityScannerOpts;
     this.plannerOpts = opts.plannerOpts;
     this.reviewerOpts = opts.reviewerOpts;
-    this.securityScannerOpts = opts.securityScannerOpts;
+    this.reviewCheckerOpts = opts.reviewCheckerOpts;
     this.embeddingOpts = opts.embeddingOpts;
     this.reviewCheck = opts.reviewCheck ?? false;
     this.reviewCheckLimit = opts.reviewCheckLimit ?? 5;
@@ -98,8 +101,8 @@ export class OrchestratorAgent {
 
     const callSetup = async (_state: typeof agentAnnotation.State) => {
       const changedFiles = await getChangedFiles();
-      const taskDetails = await getTaskDetails();
-      /*const relevantTaskDetails = {
+      /*const taskDetails = await getTaskDetails();
+      const relevantTaskDetails = {
         customId: taskDetails.custom_id,
         name: taskDetails.name,
         textContent: taskDetails.text_content,
@@ -113,12 +116,12 @@ export class OrchestratorAgent {
       }
 
       await gitCheckout();
-      await this.graphDbSetup.buildGraph(gitDiffHunks);
+      await this.graphDbSetup.buildGraph(gitDiffHunks, 3);
 
       return { 
         setupContext: {
           taskDetails: '', //relevantTaskDetails || '',
-          codingGuidelines: '', //codingGuidelines?.content || '',
+          codingGuidelines: 'Es handelt sich um das fastify repository', //codingGuidelines?.content || '',
         },
         changedFiles: changedFiles || [],
       };
@@ -279,7 +282,7 @@ export class OrchestratorAgent {
       const results = await Promise.all(
         jobs.map(async (job) => {
           const reviewerAgent = new ReviewAgent(this.reviewerOpts, this.embeddingOpts);
-          const reviewChecker = new ReviewCheckerAgent(this.reviewerOpts);
+          const reviewChecker = new ReviewCheckerAgent(this.reviewCheckerOpts);
           const reviewAgent = await reviewerAgent.getAgent();
           const reviewCheckerAgent = await reviewChecker.getAgent();
           const reviewHumanMessage = new HumanMessage(

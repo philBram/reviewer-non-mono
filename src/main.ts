@@ -12,7 +12,7 @@ export async function main() {
 	const reviewCheckLimit = 5;
 	const runInParallel = true;
 	const recursionLimit = 200;
-	const additionalSecurityScan = false;
+	const additionalSecurityScan = true;
 
 	const createOrchestratorModelsOptions = {
 		embeddingOpts: {
@@ -21,17 +21,18 @@ export async function main() {
 		securityScannerOpts: {
 			provider: AiProvider.Google,
 			temperature: 0.2,
-			reasoning: ReasoningOptions.minimal,
 		},
 		plannerOpts: {
 			provider: AiProvider.Google,
-			temperature: 0.4,
-			reasoning: ReasoningOptions.medium,
+			temperature: 0.3,
 		},
 		reviewerOpts: {
 			provider: AiProvider.Google,
+			temperature: 1.5,
+		},
+		reviewCheckerOpts: {
+			provider: AiProvider.Google,
 			temperature: 0.3,
-			reasoning: ReasoningOptions.high,
 		},
 		reviewCheck,
 		reviewCheckLimit,
