@@ -1,4 +1,4 @@
-import { AdditionalMCPTools, BaseAgent } from '../base-agent/base-agent';
+import { BaseAgent } from '../base-agent/base-agent';
 import { CreateEmbeddingModelOptions, CreateModelOptions } from '../../lib/ai-core';
 import { getFileContent, WeaviateVectorDbTools, Neo4jGraphDbTools, searchCode } from '../../lib/ai-tools';
 import { reviewAgentSystemMessage } from '../../agent-system-messages/agent-system-messages';
@@ -10,7 +10,6 @@ export class ReviewAgent extends BaseAgent {
 	protected readonly tools: any[];
 	protected readonly systemMessage = reviewAgentSystemMessage;
 	protected readonly outputSchema = reviewsSchema;
-	protected readonly additionalMCPTools = AdditionalMCPTools.None;
 
 	constructor(
 		opts: CreateModelOptions, 

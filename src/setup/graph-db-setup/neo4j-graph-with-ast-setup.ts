@@ -125,7 +125,7 @@ export class Neo4jGraphWithAst {
         hunk.properties?.overLapStartLine >= declStartLine && hunk.properties?.overLapEndLine <= declEndLine;
 
       if (hunkOverlapsDecl) {
-        const diffUuid = this.getOrCreateUuid('' + hunk.properties?.startLine + hunk.properties?.endLine, relativeRepoPath);
+        const diffUuid = this.getOrCreateUuid(`${hunk.properties?.startLine}:${hunk.properties?.endLine}`, relativeRepoPath);
         const declInfo = await this.getDeclarationName(decl);
 
         this.addRelationshipIfNew(
@@ -636,7 +636,7 @@ export class Neo4jGraphWithAst {
           }
         }
 
-        const diffUuid = this.getOrCreateUuid('' + hunk.startLine + hunk.endLine, relativeRepoPath);
+        const diffUuid = this.getOrCreateUuid(`${hunk.startLine}:${hunk.endLine}`, relativeRepoPath);
 
         this.addNodeIfNew(
           new Node({

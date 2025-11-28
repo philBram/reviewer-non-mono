@@ -13,6 +13,7 @@ import { SecurityScannerAgent } from '../security-scanner-agent/security-scanner
 import { ReviewCheckerAgent } from '../review-checker-agent/review-checker-agent';
 
 export interface CreateOrchestratorModelsOptions {
+  graphDeps?: number;
   embeddingOpts: CreateEmbeddingModelOptions;
   securityScannerOpts: CreateModelOptions;
   plannerOpts: CreateModelOptions;
@@ -35,6 +36,7 @@ interface SetupContext {
 }
 
 export class OrchestratorAgent {
+  private readonly graphDeps: number;
   private readonly securityScannerOpts: CreateModelOptions;
   private readonly plannerOpts: CreateModelOptions;
   private readonly reviewerOpts: CreateModelOptions;
@@ -49,6 +51,7 @@ export class OrchestratorAgent {
   private readonly vectorDbSetup: WeaviateVectorDbSetup;
 
   constructor(opts: CreateOrchestratorModelsOptions) {
+    this.graphDeps = opts.graphDeps ?? 3;
     this.securityScannerOpts = opts.securityScannerOpts;
     this.plannerOpts = opts.plannerOpts;
     this.reviewerOpts = opts.reviewerOpts;
@@ -56,7 +59,7 @@ export class OrchestratorAgent {
     this.embeddingOpts = opts.embeddingOpts;
     this.reviewCheck = opts.reviewCheck ?? false;
     this.reviewCheckLimit = opts.reviewCheckLimit ?? 5;
-    this.runInParallel = opts.runInParallel ?? false;
+    this.runInParallel = opts.runInParallel ?? true;
     this.additionalSecurityScan = opts.additionalSecurityScan ?? false;
     this.recursionLimit = opts.recursionLimit ?? 25;
 
@@ -102,12 +105,12 @@ export class OrchestratorAgent {
     const callSetup = async (_state: typeof agentAnnotation.State) => {
       const changedFiles = await getChangedFiles();
       const taskDetails = await getTaskDetails();
-      const relevantTaskDetails = {
+      /*const relevantTaskDetails = {
         customId: taskDetails.custom_id,
         name: taskDetails.name,
         textContent: taskDetails.text_content,
       };
-      const codingGuidelines = await getCodingGuidelines();
+      const codingGuidelines = await getCodingGuidelines();*/
       const gitDiffHunks: DiffDetails[] = [];
 
       for (const filePath of changedFiles) {
@@ -116,12 +119,12 @@ export class OrchestratorAgent {
       }
 
       await gitCheckout();
-      await this.graphDbSetup.buildGraph(gitDiffHunks, 3);
+      await this.graphDbSetup.buildGraph(gitDiffHunks, this.graphDeps);
 
       return { 
         setupContext: {
-          taskDetails: relevantTaskDetails || '',
-          codingGuidelines: codingGuidelines?.content || '',
+          taskDetails: '', //relevantTaskDetails || '',
+          codingGuidelines: '', //codingGuidelines?.content || '',
         },
         changedFiles: changedFiles || [],
       };

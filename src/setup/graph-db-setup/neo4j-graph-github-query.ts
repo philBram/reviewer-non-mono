@@ -11,8 +11,6 @@ export async function getAllDiffHunks() {
       d.source AS source,
       d.startLine AS startLine,
       d.endLine AS endLine,
-      d.content AS content,
-      d.commitId AS commitId
     ORDER BY d.source, d.startLine ASC
   `;
 
@@ -24,7 +22,5 @@ export async function getAllDiffHunks() {
     source: row.source,
     startLine: row.startLine,
     endLine: row.endLine,
-    content: row.content,
-    commitId: row.commitId,
   }));
 }

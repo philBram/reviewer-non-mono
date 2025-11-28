@@ -31,7 +31,7 @@ export async function postPullRequestReviewComments(reviews: ModelReviewsOutput[
   const reviewCommentCount = pr.review_comments;
 
   if (currentHeadSha === PR_HEAD_SHA && reviewCommentCount > 0) {
-    logger.info(`Skipping: current head SHA does not match PR head SHA or there are comments ${reviewCommentCount} review comments`);
+    logger.info(`Skipping: current head SHA does not match PR head SHA or there are comments. ${reviewCommentCount} review comments`);
     return;
   }
   

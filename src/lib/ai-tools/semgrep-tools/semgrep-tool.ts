@@ -5,19 +5,18 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
-export function getSemgrepScanTool() {
+export function semgrepScan() {
   const schema = z.object({
     path: z.string().describe('File or directory path to scan'),
-    config: z.string().default('auto').describe('Semgrep ruleset (auto, p/security-audit, p/owasp-top-ten, etc.). Defaults to "auto".')
   });
 
   return tool(
     async (input) => {
-      const { path, config } = schema.parse(input);
+      const { path } = schema.parse(input);
 
       try {
         const { stdout } = await execAsync(
-          `semgrep scan --config=${config} --json "${path}"`,
+          `semgrep scan --config=auto --json "${path}"`,
           { 
             maxBuffer: 50 * 1024 * 1024,
             timeout: 300000

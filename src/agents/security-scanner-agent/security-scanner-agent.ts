@@ -1,13 +1,13 @@
-import { AdditionalMCPTools, BaseAgent } from '../base-agent/base-agent';
+import { BaseAgent } from '../base-agent/base-agent';
 import { CreateModelOptions } from '../../lib/ai-core';
 import { securityScannerAgentSystemMessage } from '../../agent-system-messages/agent-system-messages';
 import { securityScanSchema } from '../../lib/ai-utils';
+import { semgrepScan } from '../../lib/ai-tools';
 
 export class SecurityScannerAgent extends BaseAgent {
 	protected readonly tools: any[];
 	protected readonly systemMessage = securityScannerAgentSystemMessage;
 	protected readonly outputSchema = securityScanSchema;
-	protected readonly additionalMCPTools = AdditionalMCPTools.Semgrep;
 
 	constructor(
 		opts: CreateModelOptions, 
@@ -18,6 +18,8 @@ export class SecurityScannerAgent extends BaseAgent {
 	}
 
   private getTools() {
-		return [];
+		return [
+			semgrepScan()
+		];
   }
 } 

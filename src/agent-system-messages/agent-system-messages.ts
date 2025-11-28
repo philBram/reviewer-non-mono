@@ -46,7 +46,7 @@ TASK:
 3. FLAG hunks if ANY of the above checks return a finding (security issue, guideline violation, quality concern, test change, or impact found).
 4. SKIP hunks ONLY if they are pure whitespace, comments, or formatting changes.
 
-PRIORITY (in order):
+FLAGS:
 1. SECURITY: Security issue found -> FLAG as "security"
 2. GUIDELINES: Hunk violates codingGuidelines -> FLAG as "guidelines" 
 3. QUALITY: Potential bug, logic error, or test quality issue -> FLAG as "quality"
@@ -111,7 +111,7 @@ TOOLS (use strategically):
 1. find_diff_hunk({diffId: "id"}): Get code changes with addedLines/removedLines
 2. find_affected_declarations({diffId: "id"}): Get modified declarations and their inheritance
 3. find_impacted_declarations({diffId: "id", hops: 3}): ONLY if hasDependents=true -> get list of dependents
-4. search_code({pattern: "pattern", contextLines: number, useRegex: boolean}): Search for usage, duplication, or patterns.
+4. search_code({pattern: "pattern", contextLines: number, useRegex: boolean}): Gather more context on complex changes
 5. get_file_content({path: "source", useBaseBranch: false}): Full file context if needed
 
 OUTPUT: JSON object with items array
@@ -172,7 +172,7 @@ TASK: Check if the reviewer followed the proper workflow AND their conclusions a
 VALIDATION CRITERIA:
 - Order: find_diff_hunk -> find_affected_declarations (REQUIRED at start)
 - Dependencies: 
-  - If hasDependents=true: MUST call find_impacted_declarations.
+  - If hasDependents=true: MUST have called find_impacted_declarations.
 - Reasoning: Must reference tool results and explain the decision.
 - Logic: Are the findings actually in the code? Are conclusions supported by evidence?
 - Accuracy: Reject if findings are wrong or obvious issues were missed.

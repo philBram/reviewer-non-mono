@@ -4,21 +4,13 @@ import { ToolNode } from '@langchain/langgraph/prebuilt';
 import { createAiModel, CreateModelOptions, ToolReadyChatModel, AiProvider } from '../../lib/ai-core';
 import { RunnableLambda } from '@langchain/core/runnables';
 import { z } from 'zod';
-import { MCPTools, getSemgrepScanTool } from '../../lib/ai-tools';
 import { ModelJobsOutput, ModelReviewCheckerOutput, ModelReviewsOutput, ModelSecurityScanOutput, logger } from '../../lib/ai-utils';
-
-export enum AdditionalMCPTools {
-  None = 'none',
-  Semgrep = 'semgrep',
-}
 
 export abstract class BaseAgent {
 	private readonly llm: ToolReadyChatModel;
-  private allTools: any[] = [];
 	protected readonly abstract tools: any[];
   protected readonly abstract systemMessage: string;
   protected readonly abstract outputSchema: z.ZodObject;
-  protected abstract readonly additionalMCPTools: AdditionalMCPTools;
 
   constructor(opts: CreateModelOptions) {
 		try {
@@ -37,19 +29,7 @@ export abstract class BaseAgent {
 		}
 	}
 
-  private async useAdditionalMCPTools() {
-    if (this.additionalMCPTools === AdditionalMCPTools.Semgrep) {
-      const semgrepTool = getSemgrepScanTool();
-
-      return [semgrepTool, ...this.tools];
-    }
-
-    return this.tools;
-  }
-
   public async getAgent() {
-    this.allTools = await this.useAdditionalMCPTools();
-
     const agentAnnotation = Annotation.Root({
 			messages: Annotation<BaseMessage[]>({
 				default: () => [
@@ -65,7 +45,7 @@ export abstract class BaseAgent {
     });
 
     const validatedRunnable = RunnableLambda.from(async (input: typeof agentAnnotation.State) => {
-      const runnableWithTools = this.llm.bindTools(this.allTools);
+      const runnableWithTools = this.llm.bindTools(this.tools);
       const response = await runnableWithTools.invoke(input.messages);
       const completionTokens =
         response.usage_metadata?.output_tokens ??
@@ -135,7 +115,7 @@ export abstract class BaseAgent {
 
     const agentGraph = new StateGraph(agentAnnotation)
       .addNode('agent', callModel)
-      .addNode('tools', new ToolNode(this.allTools))
+      .addNode('tools', new ToolNode(this.tools))
       .addNode('structured_output', callModelWithStructuredOutput)
       .addEdge(START, 'agent')
       .addConditionalEdges('agent', shouldContinue, 
