@@ -10,6 +10,7 @@ export class Neo4jGraphDbTools {
     this.graphClient = Neo4jClient.getClient();
   }
 
+  // returns all DIFF_HUNKs for a file (used by PlannerAgent)
   findChanges() {
     const schema = z.object({
       filePath: z.string().describe('Full file path or filename to search for DIFF_HUNKs. Can be full path like "root/src/example/file.ts" or just filename like "file.ts"'),
@@ -46,6 +47,7 @@ export class Neo4jGraphDbTools {
     );
   }
 
+  // retrieves a single DIFF_HUNK by ID (used by ReviewAgent)
   findDiffHunk() {
     const schema = z.object({
       diffId: z.string().describe('The unique ID of the diff hunk to retrieve'),
@@ -84,6 +86,8 @@ export class Neo4jGraphDbTools {
     );
   }
 
+  // returns declarations (CLASS, METHOD, FUNCTION, TEST_CASE) directly modified by a diff 
+  // (and their inheritance if any)
   findAffectedDeclarations() {
     const schema = z.object({
       diffId: z.string().describe('The unique ID of the diff hunk (obtained from find_changes)'),
@@ -138,6 +142,7 @@ export class Neo4jGraphDbTools {
     );
   }
 
+  // traverses graph to find dependents (callers, extenders) within N hops of changed declarations
   findImpactedDeclarations() {
     const schema = z.object({
       diffId: z.string().describe('The unique ID of the diff hunk'),

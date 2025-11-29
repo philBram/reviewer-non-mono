@@ -11,9 +11,9 @@ import { Neo4jClient, getIgnoreRegex, logger } from '../../lib/ai-utils';
 export class Neo4jGraphWithAst {
   private readonly ignoreRegex = getIgnoreRegex();
   private readonly project: Project;
-  private readonly declUuids = new Map<string, string>();
-  private readonly addedNodes = new Set<string>();
-  private readonly addedRelationships = new Set<string>();
+  private readonly declUuids = new Map<string, string>(); // maps declaration key to UUID
+  private readonly addedNodes = new Set<string>(); // prevents duplicate nodes
+  private readonly addedRelationships = new Set<string>(); // prevents duplicate relationships
   private readonly nodes: Node[] = [];
   private readonly relationships: Relationship[] = [];
 
@@ -30,6 +30,7 @@ export class Neo4jGraphWithAst {
     return await Neo4jClient.getClient();
   }
 
+  // generates UUID for declaration based on name and file path (and params in some cases)
   private getOrCreateUuid(name: string, filePath: string) {
     const key = `${name}:${filePath}`;
 
@@ -90,6 +91,7 @@ export class Neo4jGraphWithAst {
     return declInfo;
   }
 
+  // only .ts and .js files and filter out (ignoreRegex)
   private async loadDocuments() {
     const loader = new DirectoryLoader(
       process.env.REPO_PATH || '',
@@ -109,6 +111,7 @@ export class Neo4jGraphWithAst {
     return filteredDocuments;
   }
 
+  // links declaration to overlapping DIFF_HUNKs via HAS_DIFF relationship
   private async addDiffHunkNode(decl: Statement | MethodDeclaration | CallExpression, declUuid: string, relativeRepoPath: string) {
     const diffHunksForFile = this.nodes.filter(node => node.type === 'DIFF_HUNK' && node.properties?.source === relativeRepoPath);
 
@@ -120,6 +123,7 @@ export class Neo4jGraphWithAst {
     const declEndLine = decl.getEndLineNumber();
 
     for (const hunk of diffHunksForFile) {
+      // check if hunk line range overlaps with declaration line range
       const hunkOverlapsDecl = 
         hunk.properties?.overLapStartLine <= declEndLine && hunk.properties?.overLapEndLine >= declStartLine ||
         hunk.properties?.overLapStartLine >= declStartLine && hunk.properties?.overLapEndLine <= declEndLine;
@@ -145,6 +149,7 @@ export class Neo4jGraphWithAst {
     }
   }
 
+  // parses a TypeScript file and extracts nodes (CLASS, METHOD, FUNCTION, INTERFACE) and relationships
   private async parseTypeScriptFile(filePath: string, content: string) {
     const sourceFile = this.project.createSourceFile(filePath, content, { overwrite: true });
     const relativeRepoPath = path.relative(process.env.REPO_PATH || '', filePath);
@@ -393,6 +398,7 @@ export class Neo4jGraphWithAst {
     }
   }
 
+  // finds all methods that call this declaration and creates CALLS relationships
   private async extractMethodCalls(decl: MethodDeclaration | FunctionDeclaration, declUuid: string) {
     const references = decl.findReferencesAsNodes();
     const declInfo = await this.getDeclarationName(decl);
@@ -446,6 +452,7 @@ export class Neo4jGraphWithAst {
     }
   }
 
+  // finds all functions that call this declaration and creates CALLS relationships
   private async extractFunctionCalls(decl: MethodDeclaration | FunctionDeclaration, declUuid: string) {
     const references = decl.findReferencesAsNodes();
     const declInfo = await this.getDeclarationName(decl);
@@ -499,6 +506,7 @@ export class Neo4jGraphWithAst {
     }
   }
 
+  // extracts test cases (describe, test, it) as TEST_CASE nodes
   private async extractTestCases(sourceFile: SourceFile, relativeRepoPath: string) {
     const callExpressions = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
     
@@ -556,6 +564,7 @@ export class Neo4jGraphWithAst {
   filterGraph(hops: number) {
     const affectedNodeIds = new Set<string>();
 
+    // start with nodes that have changes (HAS_DIFF relationship)
     for (const relationship of this.relationships) {
       if (relationship.type === 'HAS_DIFF') {
         affectedNodeIds.add(String(relationship.source.id));
@@ -564,6 +573,7 @@ export class Neo4jGraphWithAst {
 
     let currentLevel = Array.from(affectedNodeIds);
     
+    // BFS traversal for N hops
     for (let i = 0; i < hops; i++) {
       const nextLevel: string[] = [];
 
@@ -613,11 +623,13 @@ export class Neo4jGraphWithAst {
     });
   }
 
+  // creates DIFF_HUNK nodes from git diff output (needed here to also create 'orphan diff hunks')
   createDiffHunkNodes(diffDetails: DiffDetails[]) {
     for (const diffFile of diffDetails) {
       const relativeRepoPath = diffFile.filePath || '';
       for (const hunk of diffFile.hunks) {
         
+        // extract added/removed lines without +/- prefix
         const addedLines = hunk.content
           .filter(line => line.startsWith('+'))
           .map(line => line.slice(1));
@@ -625,6 +637,7 @@ export class Neo4jGraphWithAst {
           .filter(line => line.startsWith('-'))
           .map(line => line.slice(1));
 
+        // calculate actual change boundaries within hunk (needed to not overlap with unrelated declarations)
         const firstAddedOrRemovedIndex = hunk.content
           .findIndex(line => line.startsWith('+') || line.startsWith('-'));
 
@@ -675,6 +688,7 @@ export class Neo4jGraphWithAst {
     const documents = await this.loadDocuments();
     logger.info({ documentCount: documents.length }, 'TypeScript files found');
 
+    // load all TypeScript files into ts-morph so cross-file references can be resolved
     for (const doc of documents) {
       const filePath = doc.metadata.source;
       const content = doc.pageContent;

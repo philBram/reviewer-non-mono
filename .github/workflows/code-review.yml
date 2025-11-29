@@ -72,7 +72,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: reviewer-non-mono
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Build TypeScript
         working-directory: reviewer-non-mono

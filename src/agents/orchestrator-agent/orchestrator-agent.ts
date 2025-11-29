@@ -68,6 +68,7 @@ export class OrchestratorAgent {
   }
 
   public async getAgent() {
+    // state annotations define how results are gathered across nodes
     const agentAnnotation = Annotation.Root({
       setupContext: Annotation<SetupContext>({
         reducer: (_x, y) => y,
@@ -102,6 +103,7 @@ export class OrchestratorAgent {
       }),
     });
 
+    // initial setup: get changed files, build knowledge graph (for local testing taskDetails and coding guidelines are commented out)
     const callSetup = async (_state: typeof agentAnnotation.State) => {
       const changedFiles = await getChangedFiles();
       const taskDetails = await getTaskDetails();
@@ -118,6 +120,7 @@ export class OrchestratorAgent {
         gitDiffHunks.push(fileDiffHunks);
       }
 
+      // checkout to PR-HEAD sha to build graph with changes made via the PR commit
       await gitCheckout();
       await this.graphDbSetup.buildGraph(gitDiffHunks, this.graphDeps);
 
@@ -130,6 +133,7 @@ export class OrchestratorAgent {
       };
     };
 
+    // runs security scan on one file at a time (sequential mode)
     const callSequentialSecurityScannerAgent = async (state: typeof agentAnnotation.State) => {
       if (state.changedFilesIndexSecurityScan >= state.changedFiles.length) {
         return {
@@ -158,6 +162,7 @@ export class OrchestratorAgent {
       };
     };
 
+    // runs security scan on all files in parallel
     const callParallelSecurityScannerAgents = async (state: typeof agentAnnotation.State) => {
       const changedFiles = state.changedFiles;
 
@@ -182,6 +187,7 @@ export class OrchestratorAgent {
       };
     };
 
+    // creates review jobs for one file at a time (sequential mode)
     const callSequentialPlannerAgent = async (state: typeof agentAnnotation.State) => {
       if (state.changedFilesIndex >= state.changedFiles.length) {
         return {
@@ -221,6 +227,7 @@ export class OrchestratorAgent {
       };
     };
 
+    // creates review jobs for all files in parallel
     const callParallelPlanningAgents = async (state: typeof agentAnnotation.State) => {
       const changedFiles = state.changedFiles;
 
@@ -257,6 +264,7 @@ export class OrchestratorAgent {
       };
     };
 
+    // reviews one job at a time (sequential mode)
     const callSequentialReviewerAgent = async (state: typeof agentAnnotation.State) => {
       const reviewerAgent = new ReviewAgent(this.reviewerOpts, this.embeddingOpts);
       const agent = await reviewerAgent.getAgent();
@@ -279,6 +287,7 @@ export class OrchestratorAgent {
       };
     };
 
+    // reviews all jobs in parallel, with optional ReviewChecker validation loop
     const callParallelReviewerAgents = async (state: typeof agentAnnotation.State) => {
       const jobs = state.modelJobsOutput;
 
@@ -321,6 +330,7 @@ export class OrchestratorAgent {
                 ],
               });
 
+              // ReviewChecker validates review quality in a loop (return empty review if validation loop didn't improve review made by the Reviewer)
               const checkerOutput = reviewCheckerResult.modelOutput as ModelReviewCheckerOutput[];
               const isAcceptable = checkerOutput[0].isAcceptable;
               
@@ -359,9 +369,11 @@ export class OrchestratorAgent {
       };
     };
 
+    // build graph in parallel or sequential mode
     const orchestratorGraph = new StateGraph(agentAnnotation)
       .addNode('setup', callSetup);
 
+    // parallel mode processes all files/jobs concurrently (ReviewChecker is part of the Reviewer)
     if (this.runInParallel) {
       orchestratorGraph
         .addNode('parallelPlanner', callParallelPlanningAgents)
@@ -381,6 +393,7 @@ export class OrchestratorAgent {
         .addEdge('parallelPlanner', 'parallelReviewer')
         .addEdge('parallelReviewer', END);
     } else {
+      // sequential mode follows loops (no ReviewChecker implemented for the sequential mode because parallel is default and the preferred mode)
       orchestratorGraph
         .addNode('planner', callSequentialPlannerAgent)
         .addNode('reviewer', callSequentialReviewerAgent)

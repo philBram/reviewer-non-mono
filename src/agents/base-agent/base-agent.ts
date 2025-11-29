@@ -6,6 +6,8 @@ import { RunnableLambda } from '@langchain/core/runnables';
 import { z } from 'zod';
 import { ModelJobsOutput, ModelReviewCheckerOutput, ModelReviewsOutput, ModelSecurityScanOutput, logger } from '../../lib/ai-utils';
 
+// abstract base class for all agents (Planner, Reviewer, SecurityScanner, ReviewChecker)
+// implements ReAct pattern: agent calls tools until done, then outputs structured JSON
 export abstract class BaseAgent {
 	private readonly llm: ToolReadyChatModel;
 	protected readonly abstract tools: any[];
@@ -29,6 +31,7 @@ export abstract class BaseAgent {
 		}
 	}
 
+  // builds the LangGraph state machine for this agent
   public async getAgent() {
     const agentAnnotation = Annotation.Root({
 			messages: Annotation<BaseMessage[]>({
@@ -44,6 +47,7 @@ export abstract class BaseAgent {
       })
     });
 
+    // wrapper that validates the LLM response (retries on empty output)
     const validatedRunnable = RunnableLambda.from(async (input: typeof agentAnnotation.State) => {
       const runnableWithTools = this.llm.bindTools(this.tools);
       const response = await runnableWithTools.invoke(input.messages);
@@ -59,17 +63,20 @@ export abstract class BaseAgent {
       return response;
     });
 
+    // ReAct loop: call model -> check for tool calls -> invoke tools -> repeat
     const callModel = async (state: typeof agentAnnotation.State) => {
       const response = await validatedRunnable.withRetry({ stopAfterAttempt: 3 }).invoke(state);
 
       return { messages: response };
     };
 
+    // final step to extract structured JSON from the agent's final message
     const callModelWithStructuredOutput = async (state: typeof agentAnnotation.State) => {
       const runnableWithStructuredOutput = this.llm.withStructuredOutput(this.outputSchema);
       const last = state.messages[state.messages.length - 1];
       let content = '';
 
+      // some models return fractured output as object -> needs to be extracted if it's the case
       if (typeof last.content === 'string') {
         content = last.content;
       } else if (Array.isArray(last.content)) {
@@ -103,6 +110,7 @@ export abstract class BaseAgent {
       return { modelOutput: response.items };
     };
 
+    // routing decision to continue with tools or extract final structured output
     const shouldContinue = (state: typeof agentAnnotation.State) => {
       const last = state.messages[state.messages.length - 1];
 
@@ -113,6 +121,7 @@ export abstract class BaseAgent {
       return 'structured_output';
     };
 
+    // build state graph from START -> agent <-> tools -> structured_output -> END
     const agentGraph = new StateGraph(agentAnnotation)
       .addNode('agent', callModel)
       .addNode('tools', new ToolNode(this.tools))
