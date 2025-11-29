@@ -59,12 +59,12 @@ export async function main() {
 		const reviewOutput = result.modelReviewOutput;
 		logger.info(reviewOutput);
 		
-		/*if (reviewOutput && reviewOutput.length > 0) {
+		if (reviewOutput && reviewOutput.length > 0) {
 			logger.info({ count: reviewOutput.length }, 'Processing review items for GitHub');
 			await postPullRequestReviewComments(reviewOutput);
 		} else {
 			logger.info('No review items to post.');
-		}*/
+		}
 
 		logger.info({ reviewCount: result.modelReviewOutput?.length || 0 }, 'Code review completed successfully');
 	} catch (error) {

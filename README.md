@@ -6,6 +6,7 @@ An AI-powered multi-agent system for automated code review using LangGraph and N
 
 - **Node.js** >= 18
 - **Docker** & **Docker Compose**
+- **Python** (for semgrep installation)
 - **Semgrep** (for security scanning)
 - **Grep** (for repo text search)
 
