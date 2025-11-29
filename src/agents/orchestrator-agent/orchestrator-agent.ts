@@ -330,7 +330,8 @@ export class OrchestratorAgent {
                 ],
               });
 
-              // ReviewChecker validates review quality in a loop (return empty review if validation loop didn't improve review made by the Reviewer)
+              // ReviewChecker validates review quality in a loop (return empty review if validation loop 
+              // didn't improve review made by the Reviewer)
               const checkerOutput = reviewCheckerResult.modelOutput as ModelReviewCheckerOutput[];
               const isAcceptable = checkerOutput[0].isAcceptable;
               
@@ -393,7 +394,8 @@ export class OrchestratorAgent {
         .addEdge('parallelPlanner', 'parallelReviewer')
         .addEdge('parallelReviewer', END);
     } else {
-      // sequential mode follows loops (no ReviewChecker implemented for the sequential mode because parallel is default and the preferred mode)
+      // sequential mode follows loops (no ReviewChecker implemented for the sequential mode because 
+      // parallel is default and the preferred mode)
       orchestratorGraph
         .addNode('planner', callSequentialPlannerAgent)
         .addNode('reviewer', callSequentialReviewerAgent)

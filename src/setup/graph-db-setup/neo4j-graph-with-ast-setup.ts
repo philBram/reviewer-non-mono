@@ -11,9 +11,9 @@ import { Neo4jClient, getIgnoreRegex, logger } from '../../lib/ai-utils';
 export class Neo4jGraphWithAst {
   private readonly ignoreRegex = getIgnoreRegex();
   private readonly project: Project;
-  private readonly declUuids = new Map<string, string>(); // maps declaration key to UUID
-  private readonly addedNodes = new Set<string>(); // prevents duplicate nodes
-  private readonly addedRelationships = new Set<string>(); // prevents duplicate relationships
+  private readonly declUuids = new Map<string, string>();
+  private readonly addedNodes = new Set<string>();
+  private readonly addedRelationships = new Set<string>();
   private readonly nodes: Node[] = [];
   private readonly relationships: Relationship[] = [];
 
@@ -111,7 +111,7 @@ export class Neo4jGraphWithAst {
     return filteredDocuments;
   }
 
-  // links declaration to overlapping DIFF_HUNKs via HAS_DIFF relationship
+  // links declaration to overlap DIFF_HUNKs via HAS_DIFF relationship
   private async addDiffHunkNode(decl: Statement | MethodDeclaration | CallExpression, declUuid: string, relativeRepoPath: string) {
     const diffHunksForFile = this.nodes.filter(node => node.type === 'DIFF_HUNK' && node.properties?.source === relativeRepoPath);
 
@@ -573,7 +573,7 @@ export class Neo4jGraphWithAst {
 
     let currentLevel = Array.from(affectedNodeIds);
     
-    // BFS traversal for N hops
+    // BFS traversal for N hops (find all indirectly affected nodes within N hops)
     for (let i = 0; i < hops; i++) {
       const nextLevel: string[] = [];
 
@@ -604,12 +604,14 @@ export class Neo4jGraphWithAst {
       currentLevel = nextLevel;
     }
 
+    // also include DIFF_HUNK that have no relationships but are affected (orphan hunks)
     for (const node of this.nodes) {
       if (node.type === 'DIFF_HUNK') {
         affectedNodeIds.add(String(node.id));
       }
     }
 
+    // filter out nodes and relationships that are not affected
     const filteredNodes = this.nodes.filter(node => affectedNodeIds.has(String(node.id)));
     const filteredRelationships = this.relationships.filter(relationship => 
       (affectedNodeIds.has(String(relationship.source.id)) &&
@@ -623,7 +625,7 @@ export class Neo4jGraphWithAst {
     });
   }
 
-  // creates DIFF_HUNK nodes from git diff output (needed here to also create 'orphan diff hunks')
+  // creates DIFF_HUNK nodes from git diff output (needed here to also create 'orphan' DIFF_HUNKs)
   createDiffHunkNodes(diffDetails: DiffDetails[]) {
     for (const diffFile of diffDetails) {
       const relativeRepoPath = diffFile.filePath || '';

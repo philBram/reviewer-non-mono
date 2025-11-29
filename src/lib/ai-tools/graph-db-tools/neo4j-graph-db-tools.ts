@@ -41,7 +41,7 @@ export class Neo4jGraphDbTools {
       },
       {
         name: 'find_changes',
-        description: 'PRIMARY TOOL: Find all code changes (DIFF_HUNKs) for a specific file. Provide the file path (full or filename only) to find DIFF_HUNKs.',
+        description: 'Find all code changes (DIFF_HUNKs) for a specific file. Provide the file path (full or filename only) to find DIFF_HUNKs.',
         schema: schema,
       }
     );
@@ -136,13 +136,13 @@ export class Neo4jGraphDbTools {
       },
       {
         name: 'find_affected_declarations',
-        description: 'Get the context of declarations (classes/methods/functions) affected by a diff. Shows declaration details and inheritance relationships (EXTENDS/IMPLEMENTS).',
+        description: 'Get the context of declarations (classes/methods/functions/tests) affected by a diff. Shows declaration details and inheritance relationships (EXTENDS/IMPLEMENTS).',
         schema: schema,
       }
     );
   }
 
-  // traverses graph to find dependents (callers, extenders) within N hops of changed declarations
+  // traverses graph to find dependents within N hops of a changed declaration
   findImpactedDeclarations() {
     const schema = z.object({
       diffId: z.string().describe('The unique ID of the diff hunk'),

@@ -10,7 +10,7 @@ export async function getAllDiffHunks() {
       d.diffType AS diffType,
       d.source AS source,
       d.startLine AS startLine,
-      d.endLine AS endLine,
+      d.endLine AS endLine
     ORDER BY d.source, d.startLine ASC
   `;
 
